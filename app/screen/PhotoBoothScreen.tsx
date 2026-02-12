@@ -1,0 +1,408 @@
+'use client';
+
+import React, { useState, useRef, useCallback } from 'react';
+import Webcam from 'react-webcam';
+import {
+  Camera, ChevronDown, Upload, Sparkles,
+  RefreshCw, ArrowRight, X, Image as ImageIcon, Trash2, FlipHorizontal,
+  ZoomIn, ZoomOut, Star
+} from 'lucide-react';
+import { filters } from '../lib/constants';
+
+// --- ส่วนประกอบไอคอนเฟรมคงเดิม (ย่อเพื่อประหยัดพื้นที่) ---
+const FrameIcon = ({ type }: { type: string }) => {
+  const baseClass = "border border-gray-400 bg-gray-100";
+  if (type === '2-v') return <div className="flex flex-col gap-[1px] w-3 h-5"><div className={`w-full h-1/2 ${baseClass}`}></div><div className={`w-full h-1/2 ${baseClass}`}></div></div>;
+  if (type === '3-v') return <div className="flex flex-col gap-[1px] w-3 h-5"><div className={`w-full h-1/3 ${baseClass}`}></div><div className={`w-full h-1/3 ${baseClass}`}></div><div className={`w-full h-1/3 ${baseClass}`}></div></div>;
+  if (type === '4-v') return <div className="flex flex-col gap-[1px] w-3 h-5"><div className={`w-full h-1/4 ${baseClass}`}></div><div className={`w-full h-1/4 ${baseClass}`}></div><div className={`w-full h-1/4 ${baseClass}`}></div><div className={`w-full h-1/4 ${baseClass}`}></div></div>;
+  if (type === '4-grid') return <div className="grid grid-cols-2 gap-[1px] w-4 h-4"><div className={`aspect-square ${baseClass}`}></div><div className={`aspect-square ${baseClass}`}></div><div className={`aspect-square ${baseClass}`}></div><div className={`aspect-square ${baseClass}`}></div></div>;
+  if (type === '6-grid') return <div className="grid grid-cols-2 gap-[1px] w-4 h-5"><div className={`h-1.5 ${baseClass}`}></div><div className={`h-1.5 ${baseClass}`}></div><div className={`h-1.5 ${baseClass}`}></div><div className={`h-1.5 ${baseClass}`}></div><div className={`h-1.5 ${baseClass}`}></div><div className={`h-1.5 ${baseClass}`}></div></div>;
+  if (type === '8-grid') return <div className="grid grid-cols-2 gap-[1px] w-4 h-6"><div className={`h-1.5 ${baseClass}`}></div><div className={`h-1.5 ${baseClass}`}></div><div className={`h-1.5 ${baseClass}`}></div><div className={`h-1.5 ${baseClass}`}></div><div className={`h-1.5 ${baseClass}`}></div><div className={`h-1.5 ${baseClass}`}></div><div className={`h-1.5 ${baseClass}`}></div><div className={`h-1.5 ${baseClass}`}></div></div>;
+  if (type === '10-grid') return <div className="grid grid-cols-2 gap-[1px] w-4 h-8">{[...Array(10)].map((_, i) => (<div key={i} className={`h-1.5 ${baseClass}`}></div>))}</div>;
+  return <div className={`w-4 h-4 ${baseClass}`}></div>;
+};
+
+// --- ข้อมูลตัวเลือกคงเดิม ---
+type FrameOption = { id: string; label: string; count: number; iconType: string; };
+const frameOptions: FrameOption[] = [
+  { id: '1-full', label: '1 รูปภาพ', count: 1, iconType: '1-full' },
+  { id: '2-strip', label: '2 รูปภาพ', count: 2, iconType: '2-v' },
+  { id: '4-grid', label: '4 รูปภาพ', count: 4, iconType: '4-grid' },
+  { id: '6-grid', label: '6 รูปภาพ', count: 6, iconType: '6-grid' },
+  { id: '8-grid', label: '8 รูปภาพ', count: 8, iconType: '8-grid' },
+  { id: '10-grid', label: '10 รูปภาพ', count: 10, iconType: '10-grid' },
+];
+const timerOptions = [0, 3, 5, 10];
+
+interface PhotoBoothProps { onFinish?: (photos: string[], filterId: string) => void; }
+
+export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
+  const webcamRef = useRef<Webcam>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
+  const [selectedFrame, setSelectedFrame] = useState<FrameOption>(frameOptions[0]);
+  const [selectedFilter, setSelectedFilter] = useState<string>('normal');
+  const [favoriteFilters, setFavoriteFilters] = useState<string[]>([]);
+  const [timerSetting, setTimerSetting] = useState<number>(0);
+  const [countDown, setCountDown] = useState<number | null>(null);
+  const [showFrameMenu, setShowFrameMenu] = useState(false);
+  const [showTimerMenu, setShowTimerMenu] = useState(false);
+
+  // Zoom State (Digital Zoom)
+  const [zoom, setZoom] = useState(1);
+  const minZoom = 1;
+  const maxZoom = 3;
+
+  const cropImage = async (imageSrc: string, zoomLevel: number): Promise<string> => {
+    if (zoomLevel <= 1) return imageSrc;
+
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { resolve(imageSrc); return; }
+
+        const w = img.width;
+        const h = img.height;
+
+        const cropW = w / zoomLevel;
+        const cropH = h / zoomLevel;
+        const cropX = (w - cropW) / 2;
+        const cropY = (h - cropH) / 2;
+
+        canvas.width = w;
+        canvas.height = h;
+
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+
+        ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', 1.0));
+      };
+      img.src = imageSrc;
+    });
+  };
+
+
+
+  // Load Favorites from LocalStorage
+  React.useEffect(() => {
+    const saved = localStorage.getItem('favoriteFilters');
+    if (saved) {
+      try {
+        setFavoriteFilters(JSON.parse(saved));
+      } catch (e) {
+        console.error('Failed to parse favoriteFilters', e);
+      }
+    }
+  }, []);
+
+  // Save Favorites to LocalStorage
+  React.useEffect(() => {
+    localStorage.setItem('favoriteFilters', JSON.stringify(favoriteFilters));
+  }, [favoriteFilters]);
+
+  const toggleFavorite = (e: React.MouseEvent, filterId: string) => {
+    e.stopPropagation();
+    setFavoriteFilters(prev =>
+      prev.includes(filterId)
+        ? prev.filter(id => id !== filterId)
+        : [...prev, filterId]
+    );
+  };
+
+  const sortedFilters = React.useMemo(() => {
+    return [...filters].sort((a, b) => {
+      const aIsFav = favoriteFilters.includes(a.id);
+      const bIsFav = favoriteFilters.includes(b.id);
+      if (aIsFav && !bIsFav) return -1;
+      if (!aIsFav && bIsFav) return 1;
+      return 0; // Maintain original order among favorites and non-favorites
+    });
+  }, [favoriteFilters]);
+
+  const handleZoomChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setZoom(parseFloat(e.target.value));
+  };
+
+  const toggleCamera = useCallback(() => { setFacingMode(prev => (prev === 'user' ? 'environment' : 'user')); }, []);
+
+  const startCapture = useCallback(() => {
+    setShowFrameMenu(false); setShowTimerMenu(false);
+    const takePhoto = async () => {
+      const imageSrc = webcamRef.current?.getScreenshot();
+      if (imageSrc) {
+        const croppedSrc = await cropImage(imageSrc, zoom);
+        setPhotos(prev => [...prev, croppedSrc]);
+      }
+      setCountDown(null);
+    };
+    if (timerSetting === 0) { takePhoto(); return; }
+    let time = timerSetting; setCountDown(time);
+    const interval = setInterval(() => {
+      time -= 1; setCountDown(time);
+      if (time === 0) { clearInterval(interval); takePhoto(); }
+    }, 1000);
+  }, [webcamRef, timerSetting, zoom]);
+
+  const resetAll = () => { setPhotos([]); setZoom(1); };
+  const deletePhoto = (indexToDelete: number) => { setPhotos(prev => prev.filter((_, index) => index !== indexToDelete)); };
+  const handleUploadClick = () => fileInputRef.current?.click();
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => { setPhotos(prev => [...prev, reader.result as string]); };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const activeFilterClass = filters.find(f => f.id === selectedFilter)?.class || '';
+  const isComplete = photos.length >= selectedFrame.count;
+
+  return (
+    <div
+      className="w-full min-h-[100dvh] bg-[#FFF0F5] relative font-sans overflow-x-hidden flex flex-col"
+      onClick={() => { setShowFrameMenu(false); setShowTimerMenu(false); }}
+    >
+      {/* Background Decor */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-pink-300 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob"></div>
+        <div className="absolute top-[-10%] right-[-10%] w-[500px] h-[500px] bg-purple-300 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-2000"></div>
+      </div>
+
+      <div className="relative z-10 w-full flex-grow flex flex-col items-center justify-center p-2 sm:p-4 md:p-8">
+        <div
+          className="bg-white/60 backdrop-blur-xl rounded-[2rem] md:rounded-[3rem] shadow-2xl border border-white/50 p-4 sm:p-6 md:p-8 w-full max-w-5xl flex flex-col md:flex-row gap-6 md:gap-8 items-start justify-center"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* LEFT SIDE: Camera & Controls */}
+          <div className="flex-1 w-full flex flex-col items-center">
+
+            <div className="md:hidden text-center mb-4">
+              <h1 className="text-xl font-bold text-gray-800 flex items-center gap-2 justify-center">
+                <Sparkles className="text-pink-500" size={18} /> Photo Booth
+              </h1>
+            </div>
+
+            {/* Top Bar Controls */}
+            <div className="flex flex-wrap gap-2 mb-4 justify-center w-full z-50">
+              <div className="relative">
+                <button
+                  onClick={(e) => { e.stopPropagation(); setShowFrameMenu(!showFrameMenu); setShowTimerMenu(false); }}
+                  className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-gray-200 text-gray-700 text-xs md:text-sm font-bold hover:border-pink-300 shadow-sm min-w-[110px] md:min-w-[130px] justify-between"
+                >
+                  <div className="flex items-center gap-2">
+                    <FrameIcon type={selectedFrame.iconType} />
+                    <span>{selectedFrame.label}</span>
+                  </div>
+                  <ChevronDown size={14} className={`transition-transform ${showFrameMenu ? 'rotate-180' : ''}`} />
+                </button>
+                {showFrameMenu && (
+                  <div className="absolute top-full left-0 mt-2 w-[240px] md:w-[280px] bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden p-2 grid grid-cols-2 gap-1 z-50 animate-in fade-in zoom-in-95">
+                    {frameOptions.map((option) => (
+                      <button
+                        key={option.id}
+                        onClick={() => { setSelectedFrame(option); setPhotos([]); setShowFrameMenu(false); }}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs md:text-sm transition-colors text-left ${selectedFrame.id === option.id ? 'bg-gray-100 font-bold text-gray-900' : 'hover:bg-gray-50 text-gray-600'}`}
+                      >
+                        <FrameIcon type={option.iconType} />
+                        <span>{option.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="relative">
+                <button
+                  onClick={(e) => { e.stopPropagation(); setShowTimerMenu(!showTimerMenu); setShowFrameMenu(false); }}
+                  className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-gray-200 text-gray-700 text-xs md:text-sm font-bold hover:border-pink-300 shadow-sm min-w-[100px] md:min-w-[120px] justify-between"
+                >
+                  <span>{timerSetting === 0 ? 'ไม่นับ' : `${timerSetting}s`}</span>
+                  <ChevronDown size={14} className={`transition-transform ${showTimerMenu ? 'rotate-180' : ''}`} />
+                </button>
+                {showTimerMenu && (
+                  <div className="absolute top-full left-0 mt-2 w-full bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden p-1 z-50">
+                    {timerOptions.map((time) => (
+                      <button
+                        key={time}
+                        onClick={() => { setTimerSetting(time); setShowTimerMenu(false); }}
+                        className={`flex justify-between w-full px-3 py-2 text-xs md:text-sm rounded-lg ${timerSetting === time ? 'bg-pink-50 text-pink-500 font-bold' : 'hover:bg-gray-50 text-gray-600'}`}
+                      >
+                        <span>{time === 0 ? 'ปิด' : `${time} วินาที`}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
+              <button onClick={handleUploadClick} className="flex items-center gap-2 bg-white border border-pink-200 px-3 py-2 rounded-xl text-pink-500 text-xs md:text-sm font-bold hover:bg-pink-50 shadow-sm">
+                <Upload size={14} />
+                <span>เพิ่มรูป</span>
+              </button>
+            </div>
+
+            {/* Camera Area - ปรับปรุงให้เต็มกรอบขาวเสมอ */}
+            <div className="relative w-full max-w-[420px] aspect-[3/4] bg-white rounded-[1.5rem] md:rounded-[2.5rem] p-2 md:p-4 shadow-2xl border border-gray-100 mb-6 flex items-center justify-center overflow-hidden">
+              <div className="relative w-full h-full rounded-[1rem] md:rounded-[1.8rem] overflow-hidden bg-black">
+                <div className="w-full h-full overflow-hidden relative">
+                  <Webcam
+                    audio={false}
+                    ref={webcamRef}
+                    screenshotFormat="image/jpeg"
+                    screenshotQuality={1}
+                    mirrored={facingMode === 'user'}
+                    videoConstraints={{
+                      width: { min: 1280, ideal: 3840, max: 3840 },
+                      height: { min: 720, ideal: 2160, max: 2160 },
+                      facingMode: facingMode,
+                      aspectRatio: { ideal: 0.75 } // บังคับ 3:4 
+                    }}
+                    style={{ transform: `scale(${zoom})`, transformOrigin: 'center center' }}
+                    className={`absolute inset-0 w-full h-full object-cover transition-transform duration-100 ease-linear ${activeFilterClass}`}
+                  />
+
+                  {/* Simulated Emoji Frame Overlay */}
+                  <div className="absolute inset-0 pointer-events-none z-10 flex flex-col justify-between p-2 opacity-80">
+                    <div className="flex justify-center gap-1 sm:gap-4 text-xl sm:text-2xl drop-shadow-md">
+                    </div>
+                    <div className="flex justify-between flex-1 items-center px-1">
+                      <div className="flex flex-col gap-4 text-xl sm:text-2xl drop-shadow-md">
+                      </div>
+                      <div className="flex flex-col gap-4 text-xl sm:text-2xl drop-shadow-md">
+                      </div>
+                    </div>
+                    <div className="flex justify-center gap-1 sm:gap-4 text-xl sm:text-2xl drop-shadow-md">
+                    </div>
+                  </div>
+                </div>
+
+                {/* Camera Toggle Button */}
+                <button
+                  onClick={toggleCamera}
+                  className="absolute top-3 right-3 bg-black/40 backdrop-blur-md text-white p-2.5 rounded-full hover:bg-pink-500 transition-all z-40 border border-white/20 active:scale-90"
+                >
+                  <RefreshCw size={18} className={facingMode === 'environment' ? 'rotate-180' : ''} />
+                </button>
+
+                {/* Countdown */}
+                {countDown !== null && countDown > 0 && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/20 backdrop-blur-sm z-30">
+                    <span className="text-8xl md:text-9xl font-bold text-white drop-shadow-lg animate-bounce">{countDown}</span>
+                  </div>
+                )}
+
+                {/* Zoom Control (Always Visible) */}
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 flex flex-col items-center gap-2 z-40 bg-black/30 backdrop-blur-sm p-2 rounded-full py-4 group">
+                  <ZoomIn size={16} className="text-white/80 drop-shadow-md" />
+                  <div className="h-32 w-2 relative flex items-center justify-center">
+                    <input
+                      type="range"
+                      min={minZoom}
+                      max={maxZoom}
+                      step={0.1}
+                      value={zoom}
+                      onChange={handleZoomChange}
+                      className="absolute w-32 h-2 appearance-none bg-white/30 rounded-full outline-none -rotate-90 origin-center cursor-pointer accent-pink-500 hover:accent-pink-400"
+                    />
+                  </div>
+                  <ZoomOut size={16} className="text-white/80 drop-shadow-md" />
+                </div>
+              </div>
+
+              {/* Progress Dots */}
+              <div className="absolute bottom-6 md:bottom-10 left-0 right-0 flex justify-center gap-2 z-20">
+                {Array.from({ length: selectedFrame.count }).map((_, i) => (
+                  <div key={i} className={`w-2 h-2 md:w-2.5 md:h-2.5 rounded-full transition-all ${i < photos.length ? 'bg-pink-500 scale-125 shadow-md' : 'bg-white/60'}`}></div>
+                ))}
+              </div>
+            </div>
+
+            {/* Filters Slider */}
+            <div className="w-full max-w-[420px]">
+              <div className="flex gap-2 md:gap-3 overflow-x-auto pb-4 px-2 scrollbar-hide">
+                {sortedFilters.map((filter) => {
+                  const isActive = selectedFilter === filter.id;
+                  const isFav = favoriteFilters.includes(filter.id);
+                  return (
+                    <button
+                      key={filter.id}
+                      onClick={() => setSelectedFilter(filter.id)}
+                      className={`flex items-center gap-1.5 px-4 py-1.5 md:px-5 md:py-2 rounded-full text-xs md:text-sm font-bold whitespace-nowrap transition-all border ${isActive ? 'bg-pink-50 border-pink-400 text-pink-500' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+                    >
+                      <span
+                        onClick={(e) => toggleFavorite(e, filter.id)}
+                        className={`transition-colors ${isFav ? 'text-yellow-400' : 'text-gray-300 hover:text-yellow-200'}`}
+                      >
+                        <Star size={14} fill={isFav ? 'currentColor' : 'none'} />
+                      </span>
+                      {filter.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="mt-4 flex flex-col items-center gap-3 w-full">
+              {!isComplete ? (
+                <button
+                  onClick={startCapture}
+                  disabled={countDown !== null}
+                  className="bg-gradient-to-r from-[#FF5C8D] to-[#FF8FAB] text-white text-base md:text-lg font-bold px-10 py-3.5 md:px-12 md:py-4 rounded-full shadow-lg shadow-pink-200 hover:scale-105 active:scale-95 transition-all flex items-center gap-3 disabled:opacity-70"
+                >
+                  <Camera className="w-5 h-5 md:w-6 md:h-6" />
+                  <span>{photos.length === 0 ? 'เริ่มจับภาพ' : `ถ่ายรูปที่ ${photos.length + 1}/${selectedFrame.count}`}</span>
+                </button>
+              ) : (
+                <div className="flex flex-col md:flex-row gap-3 md:gap-4 items-center w-full justify-center">
+                  <button onClick={() => deletePhoto(photos.length - 1)} className="bg-gray-100 text-gray-600 px-6 py-3 rounded-full text-sm font-bold hover:bg-gray-200 transition-all flex items-center gap-2 shadow-sm w-full md:w-auto justify-center">
+                    <RefreshCw size={16} /> ถ่ายใหม่
+                  </button>
+                  <button onClick={() => onFinish?.(photos, selectedFilter)} className="bg-gradient-to-r from-[#FF5C8D] to-[#FF8FAB] text-white text-base md:text-lg font-bold px-10 py-3 rounded-full shadow-lg hover:scale-105 active:scale-95 transition-all flex items-center gap-3 animate-pulse w-full md:w-auto justify-center">
+                    <span>ต่อไป</span>
+                    <ArrowRight size={20} />
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* RIGHT SIDE: Preview Strip */}
+          <div className="flex flex-row md:flex-col gap-4 w-full md:w-[140px] md:sticky md:top-8 h-auto md:h-[calc(100vh-120px)] overflow-x-auto md:overflow-x-hidden md:overflow-y-auto pr-2 scrollbar-hide pb-4 md:pb-0">
+            <div className="text-gray-400 text-xs font-bold uppercase tracking-wider text-center mb-1 sticky top-0 left-0 bg-white/90 backdrop-blur-sm py-2 z-10 min-w-[80px] md:min-w-0">Previews</div>
+            <div className="flex flex-row md:flex-col gap-3">
+              {Array.from({ length: selectedFrame.count }).map((_, i) => {
+                const photo = photos[i];
+                return (
+                  <div key={i} className="relative w-20 md:w-full aspect-[3/4] bg-gray-100 rounded-xl border-2 border-dashed border-gray-200 flex items-center justify-center overflow-hidden group flex-shrink-0">
+                    {photo ? (
+                      <>
+                        <img src={photo} className={`w-full h-full object-cover ${activeFilterClass}`} />
+                        <button onClick={() => deletePhoto(i)} className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all text-white font-bold text-xs z-10">
+                          <Trash2 size={20} />
+                        </button>
+                      </>
+                    ) : (
+                      <span className="text-gray-300 font-bold text-xl">{i + 1}</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            {photos.length > 0 && (
+              <button onClick={resetAll} className="text-gray-400 text-xs underline hover:text-red-400 transition-colors text-center pb-4">รีเซ็ตทั้งหมด</button>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-6 md:mt-8 text-pink-300/80 text-[10px] md:text-xs font-medium text-center">🎀 PhotoBooth by Photocute & Love 🎀</div>
+      </div>
+    </div >
+  );
+}
