@@ -71,19 +71,19 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
 
-        // เคลียร์พื้นหลังเป็นดำ (สำหรับกรณี zoom < 1 ที่มีขอบ)
+        // เคลียร์พื้นหลังเป็นดำ
         ctx.fillStyle = '#000000';
         ctx.fillRect(0, 0, w, h);
 
         if (zoomLevel >= 1) {
-          // ซูมเข้า: ตัดเอาส่วนกลางมาขยาย
+          // ซูมเข้า
           const cropW = w / zoomLevel;
           const cropH = h / zoomLevel;
           const cropX = (w - cropW) / 2;
           const cropY = (h - cropH) / 2;
           ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, w, h);
         } else {
-          // ซูมออก: วางรูปให้เล็กลงตรงกลาง (จำลอง Wide Angle)
+          // ซูมออก (Wide Angle)
           const drawW = w * zoomLevel;
           const drawH = h * zoomLevel;
           const drawX = (w - drawW) / 2;
