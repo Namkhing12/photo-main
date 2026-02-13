@@ -176,7 +176,7 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
 
   return (
     <div
-      className="w-full h-[100dvh] bg-[#FFF0F5] relative font-sans overflow-hidden flex flex-col overscroll-behavior-none"
+      className="w-full h-full bg-[#FFF0F5] relative font-sans overflow-y-auto flex flex-col scroll-smooth"
       onClick={() => { setShowFrameMenu(false); setShowTimerMenu(false); }}
     >
       {/* Background Decor */}

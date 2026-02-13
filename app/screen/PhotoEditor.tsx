@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState, useRef, useMemo } from 'react';
-import { Download, RefreshCw, Ban, X, Type, Lock, Image as ImageIcon, Star, Sparkles, Palette, Smile } from 'lucide-react';
-import html2canvas from 'html2canvas';
+import { Download, RefreshCw, Ban, Type, Lock, Image as ImageIcon, Star, Sparkles, Palette, Smile } from 'lucide-react';
+import { toPng, toBlob } from 'html-to-image';
 import { filters } from '../lib/constants';
 import emojisData from '../lib/emojis.json';
 
@@ -224,99 +224,73 @@ export default function PhotoEditor({ photos, onRetake, onRemovePhoto, filterId 
     if (stripRef.current && !loading) {
       try {
         setLoading(true);
+        // Wait for a moment to ensure UI is ready (optional but good practice)
         await new Promise(resolve => setTimeout(resolve, 500));
-        const cssFilter = convertTailwindToCssFilter(activeFilterClass);
-        const processedImages = new Map<number, string>();
-        const imageElements = stripRef.current.querySelectorAll('.photo-item');
-        await Promise.all(Array.from(imageElements).map(async (img: any, index) => {
-          // ประกันว่ารูปโหลดเสร็จ 100% ก่อนประมวลผล
-          if (!img.complete) {
-            await new Promise((res) => {
-              img.onload = res;
-              img.onerror = res;
-            });
-          }
 
-          const canvas = document.createElement('canvas');
-          canvas.width = img.naturalWidth || img.width;
-          canvas.height = img.naturalHeight || img.height;
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            if (cssFilter !== 'none' && 'filter' in ctx) ctx.filter = cssFilter;
-            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-            processedImages.set(index, canvas.toDataURL('image/png'));
-          }
-        }));
-
-        const canvas = await html2canvas(stripRef.current, {
-          scale: 2,
-          useCORS: true,
-          allowTaint: true,
-          backgroundColor: null,
-          logging: false,
-          onclone: (clonedDoc) => {
-            const container = clonedDoc.querySelector('.photo-strip-container') as HTMLElement;
-            if (container) {
-              // ลบ transform เพื่อให้ html2canvas จับภาพได้ตรงตำแหน่ง (สำคัญมากในมือถือ)
-              container.style.transform = 'none';
-              container.style.display = 'flex'; // มั่นใจว่ามองเห็น
-
-              if (processedImages.size > 0) {
-                // เจาะจงหาเฉพาะรูปที่อยู่ใน container นี้เท่านั้น
-                const clonedImages = container.querySelectorAll('.photo-item');
-                clonedImages.forEach((img: any, index) => {
-                  if (processedImages.has(index)) {
-                    img.src = processedImages.get(index)!;
-                    img.style.filter = 'none';
-                    img.style.WebkitFilter = 'none';
-                  }
-                });
-              }
+        // Use html-to-image to generate Blob
+        const blob = await toBlob(stripRef.current, {
+          cacheBust: true,
+          pixelRatio: 2,
+          backgroundColor: undefined,
+          style: {
+            transform: 'none',
+            margin: '0',
+            padding: '24px', // Force consistent padding (equivalent to p-6)
+            width: 'auto',
+            height: 'auto',
+            boxShadow: 'none', // Optional: remove shadow from capture if desired, or keep it. Keeping strictly layout resets.
+            transformOrigin: 'top left'
+          },
+          filter: (node: HTMLElement | SVGElement) => {
+            if (node instanceof HTMLElement && node.dataset.html2canvasIgnore === 'true') {
+              return false;
             }
+            return true;
           }
         });
 
-        canvas.toBlob(async (blob) => {
-          if (!blob) throw new Error('Canvas to Blob failed');
-          const fileName = `photocute-${Date.now()}.png`;
-          const file = new File([blob], fileName, { type: 'image/png' });
-          if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-            try { await navigator.share({ files: [file], title: 'PhotoCute', text: 'Boom!' }); } catch (shareErr: any) { if (shareErr.name !== 'AbortError') fallbackDownload(blob, fileName); }
-          } else { fallbackDownload(blob, fileName); }
-          setLoading(false);
-        }, 'image/png');
-      } catch (err) {
-        alert("เกิดข้อผิดพลาด: " + err);
+        if (!blob) throw new Error('Failed to capture image');
+
+        const fileName = `photocute-${Date.now()}.png`;
+
+        // Direct Download (User requested "immediate" download)
+        // Note: On Android this usually goes to Gallery. On iOS it goes to Files.
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        // Revoke after a delay to ensure mobile browsers allow the download
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+      } catch (err: any) {
+        console.error("Capture failure:", err);
+        alert("ขออภัย! ไม่สามารถดาวน์โหลดรูปได้: " + (err.message || "ข้อผิดพลาดที่ไม่รู้จัก"));
+      } finally {
         setLoading(false);
       }
     }
   };
 
-  const fallbackDownload = (blob: Blob, fileName: string) => {
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = fileName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    setTimeout(() => URL.revokeObjectURL(url), 100);
-  };
+
 
   return (
-    <div className="w-full h-[100dvh] bg-[#FFF0F5] flex flex-col items-center font-sans overflow-hidden overscroll-behavior-none">
+    <div className="w-full min-h-screen bg-[#FFF0F5] flex flex-col items-center font-sans overflow-y-auto relative scroll-smooth">
       {/* Header - Hidden on mobile to save space */}
       <h1 className="hidden md:block text-xl md:text-2xl font-bold text-pink-500 my-4 text-center px-4">
         Photo Booth By PhotoCute
       </h1>
 
-      <div className="flex flex-col md:flex-row items-center md:items-start justify-center w-full max-w-6xl h-full md:p-4 overflow-hidden gap-4">
+      <div className="flex flex-col md:flex-row items-center md:items-start justify-center w-full max-w-6xl md:p-4 gap-2 md:gap-4">
 
-        {/* --- LEFT: Shared Preview (Sticky on Mobile) --- */}
-        <div className="w-full md:w-auto flex-shrink-0 flex justify-center bg-[#FFF0F5] md:bg-transparent p-4 md:p-0 z-20 shadow-sm md:shadow-none">
+        {/* --- LEFT: Shared Preview --- */}
+        <div className="w-full md:w-auto flex-shrink-0 flex justify-center bg-[#FFF0F5] md:bg-transparent pt-2 md:p-0 z-20">
           <div
             ref={stripRef}
-            className="photo-strip-container relative p-4 md:p-6 shadow-2xl transition-all duration-300 ease-in-out flex flex-col items-center gap-4 overflow-hidden origin-top scale-[0.5] min-[380px]:scale-[0.6] sm:scale-[0.7] md:scale-85 lg:scale-95"
+            className="photo-strip-container relative p-4 md:p-6 shadow-2xl transition-all duration-300 ease-in-out flex flex-col items-center gap-4 overflow-hidden origin-top scale-[0.6] min-[380px]:scale-[0.75] sm:scale-[0.8] md:scale-85 lg:scale-95 mb-[-120px] min-[380px]:mb-[-80px] md:mb-0"
             style={{
               minWidth: '320px',
               maxWidth: '380px',
@@ -326,21 +300,14 @@ export default function PhotoEditor({ photos, onRetake, onRemovePhoto, filterId 
           >
             <div className={`grid gap-3 w-full relative z-10 ${photos.length <= 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
               {photos.map((img, idx) => (
-                <div key={idx} className="relative aspect-[3/4] overflow-hidden group bg-white rounded-sm shadow-sm border border-gray-100/50">
+                <div key={idx} className="relative aspect-[3/4] overflow-hidden group rounded-sm">
                   <img
                     src={img}
                     alt={`snap-${idx}`}
                     className={`photo-item w-full h-full object-cover ${activeFilterClass}`}
                     style={{ transform: 'translateZ(0)', filter: convertTailwindToCssFilter(activeFilterClass) }}
                   />
-                  {/* Remove Button - Hidden during html2canvas but visible to user */}
-                  <button
-                    onClick={() => onRemovePhoto(idx)}
-                    className="absolute top-1 right-1 bg-black/50 hover:bg-red-500 text-white p-1.5 rounded-full transition-all opacity-0 group-hover:opacity-100 z-40"
-                    data-html2canvas-ignore="true"
-                  >
-                    <X size={14} strokeWidth={3} />
-                  </button>
+                  {/* Delete button removed as requested */}
                 </div>
               ))}
             </div>
@@ -379,35 +346,35 @@ export default function PhotoEditor({ photos, onRetake, onRemovePhoto, filterId 
             {activeTab === 'frame' && (
               <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
                 <section className="mb-6">
-                  <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">สีพื้นหลัง / กราเดียนท์</h3>
-                  <div className="flex flex-wrap gap-2">
+                  <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 px-1">สีพื้นหลัง / กราเดียนท์</h3>
+                  <div className="flex overflow-x-auto gap-3 pb-4 no-scrollbar -mx-1 px-1 snap-x">
                     {frameColors.map((color) => (
                       <button
                         key={color.id}
                         onClick={() => { setIsCustomActive(false); setSelectedColor(color); }}
-                        className={`w-10 h-10 rounded-full border-2 transform transition-all shadow-sm ${(!isCustomActive && selectedColor.id === color.id) ? 'border-pink-500 scale-110' : 'border-white'}`}
+                        className={`w-12 h-12 flex-shrink-0 rounded-full border-2 transform transition-all shadow-sm snap-start ${(!isCustomActive && selectedColor.id === color.id) ? 'border-pink-500 scale-110' : 'border-white hover:scale-105'}`}
                         style={{ background: color.hex }}
                       />
                     ))}
-                    <div className="relative w-10 h-10 rounded-full border-2 border-white shadow-sm flex items-center justify-center overflow-hidden" style={{ background: customColor }}>
+                    <div className="relative w-12 h-12 flex-shrink-0 rounded-full border-2 border-white shadow-sm flex items-center justify-center overflow-hidden snap-start" style={{ background: customColor }}>
                       <input type="color" value={customColor} onChange={(e) => { setCustomColor(e.target.value); setIsCustomActive(true); }} className="absolute inset-0 opacity-0 cursor-pointer" />
-                      <Sparkles size={16} className={isCustomActive ? 'text-pink-500' : 'text-gray-400'} />
+                      <Sparkles size={20} className={isCustomActive ? 'text-pink-500' : 'text-gray-400'} />
                     </div>
                   </div>
                 </section>
                 <section>
-                  <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">รูปแบบกรอบ</h3>
-                  <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-4 gap-2">
+                  <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 px-1">รูปแบบกรอบ</h3>
+                  <div className="flex overflow-x-auto gap-3 pb-4 no-scrollbar -mx-1 px-1 snap-x">
                     {overlayFrames.map((frame) => (
                       <button
                         key={frame.id}
                         onClick={() => setSelectedFrameOverlay(frame.id)}
-                        className={`aspect-square rounded-xl flex items-center justify-center transition-all relative ${selectedFrameOverlay === frame.id ? 'bg-pink-100 border-2 border-pink-400' : 'bg-gray-50 border border-gray-100'}`}
+                        className={`w-16 h-16 flex-shrink-0 rounded-xl flex items-center justify-center transition-all relative snap-start ${selectedFrameOverlay === frame.id ? 'bg-pink-100 border-2 border-pink-400' : 'bg-gray-50 border border-gray-100'}`}
                       >
                         {frame.id === 'none' ? <Ban className="text-gray-300" /> : (
                           <div className="relative">
-                            <span className="text-xl">
-                              {frame.type === 'image' ? <ImageIcon size={20} className="text-pink-400" /> : frame.src}
+                            <span className="text-2xl">
+                              {frame.type === 'image' ? <ImageIcon size={24} className="text-pink-400" /> : frame.src}
                             </span>
                             {frame.isPremium && (
                               <div className="absolute -top-3 -right-3 bg-white p-0.5 rounded-full shadow-sm">
@@ -426,6 +393,10 @@ export default function PhotoEditor({ photos, onRetake, onRemovePhoto, filterId 
 
             {activeTab === 'emoji' && (
               <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <div className="flex justify-between items-end mb-2 px-1">
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">เลือกมุมที่ต้องการเปลี่ยน</label>
+                  <label className="text-[10px] font-bold text-pink-500 bg-pink-200 px-2 py-0.5 rounded-full animate-pulse">กดอิโมจิด้านล่างก่อน</label>
+                </div>
                 <div className="grid grid-cols-2 gap-2 mb-4">
                   {(['topLeft', 'topRight', 'bottomLeft', 'bottomRight'] as const).map(corner => (
                     <button key={corner} onClick={() => setActiveCorner(corner)} className={`p-3 rounded-2xl border transition-all ${activeCorner === corner ? 'bg-pink-50 border-pink-300 shadow-sm' : 'border-gray-100 bg-gray-50'}`}>
@@ -475,18 +446,18 @@ export default function PhotoEditor({ photos, onRetake, onRemovePhoto, filterId 
 
             {activeTab === 'filter' && (
               <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-                <div className="grid grid-cols-3 gap-3">
+                <div className="flex overflow-x-auto gap-4 pb-4 no-scrollbar -mx-1 px-1 snap-x">
                   {sortedFilters.map(f => {
                     const isF = favoriteFilters.includes(f.id);
                     return (
-                      <button key={f.id} onClick={() => setSelectedFilter(f.id)} className={`flex flex-col items-center p-3 rounded-2xl border transition-all ${selectedFilter === f.id ? 'bg-pink-50 border-pink-300' : 'bg-gray-50 border-gray-100'}`}>
+                      <button key={f.id} onClick={() => setSelectedFilter(f.id)} className={`flex-shrink-0 flex flex-col items-center p-3 rounded-2xl border transition-all snap-start w-28 ${selectedFilter === f.id ? 'bg-pink-50 border-pink-300' : 'bg-gray-50 border-gray-100'}`}>
                         <div className="relative mb-2">
-                          <div className={`w-12 h-12 rounded-lg bg-gray-200 ${f.class}`} />
+                          <div className={`w-16 h-16 rounded-lg bg-gray-200 ${f.class}`} />
                           <div onClick={e => toggleFavorite(e, f.id)} className={`absolute -top-2 -right-2 p-1 rounded-full shadow-sm bg-white ${isF ? 'text-yellow-400' : 'text-gray-300'}`}>
-                            <Star size={10} fill={isF ? 'currentColor' : 'none'} />
+                            <Star size={12} fill={isF ? 'currentColor' : 'none'} />
                           </div>
                         </div>
-                        <span className="text-[10px] font-bold text-center">{f.name}</span>
+                        <span className="text-[10px] font-bold text-center truncate w-full">{f.name}</span>
                       </button>
                     );
                   })}

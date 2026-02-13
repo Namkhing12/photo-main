@@ -32,10 +32,12 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased h-[100dvh] flex flex-col overflow-hidden`}
       >
         <NavbarWrapper />
-        {children}
+        <main className="flex-1 min-h-0 overflow-y-auto relative custom-scrollbar">
+          {children}
+        </main>
       </body>
     </html>
   );
