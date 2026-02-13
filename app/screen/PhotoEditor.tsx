@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
-import { Download, RefreshCw, Ban, X, Type, Lock, Image as ImageIcon, Star, Sparkles } from 'lucide-react';
+import React, { useState, useRef, useMemo } from 'react';
+import { Download, RefreshCw, Ban, X, Type, Lock, Image as ImageIcon, Star, Sparkles, Palette, Smile } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { filters } from '../lib/constants';
 import emojisData from '../lib/emojis.json';
@@ -17,8 +17,6 @@ const frameColors = [
   { id: 'cream', hex: '#fef3c7', isPremium: false },
   { id: 'Chinese New Year', hex: '#ff8c8aff', isPremium: false },
   { id: 'Christmas', hex: '#23652bff', isPremium: false },
-
-  //สีพรีเมียม 
   { id: 'emerald', hex: '#a7f3d0', isPremium: false },
   { id: 'teal', hex: '#99f6e4', isPremium: false },
   { id: 'cyan', hex: '#a5f3fc', isPremium: false },
@@ -28,8 +26,6 @@ const frameColors = [
   { id: 'purple', hex: '#e9d5ff', isPremium: false },
   { id: 'fuchsia', hex: '#f5d0fe', isPremium: false },
   { id: 'rose', hex: '#fecdd3', isPremium: false },
-
-
   { id: 'gradient-1', hex: 'linear-gradient(135deg, #fbcfe8 0%, #e9d5ff 100%)', isPremium: false },
   { id: 'gradient-2', hex: 'linear-gradient(135deg, #fef08a 0%, #fed7aa 100%)', isPremium: false },
   { id: 'gradient-3', hex: 'linear-gradient(135deg, #bfdbfe 0%, #a5f3fc 100%)', isPremium: false },
@@ -52,199 +48,85 @@ const overlayFrames = [
   { id: 'sparkle', src: '✨', name: '✨ Sparkle', type: 'emoji', isPremium: false },
   { id: 'nature', src: '🌿', name: '🌿 Nature', type: 'emoji', isPremium: false },
   { id: 'cool', src: '😎', name: '😎 Cool', type: 'emoji', isPremium: false },
-  { id: 'Chinese New Year', src: '🧧', name: '🧧 Chinese New Year', type: 'emoji', isPremium: false },
-  { id: 'Christmas', src: '🎄', name: '🎄 Christmas', type: 'emoji', isPremium: false },
+  { id: 'Chinese New Year', src: '🧧', name: '🧧 CNY', type: 'emoji', isPremium: false },
+  { id: 'Christmas', src: '🎄', name: '🎄 Xmas', type: 'emoji', isPremium: false },
   { id: 'birthday', src: '🎂', name: '🎂 Birthday', type: 'emoji', isPremium: false },
   { id: 'love', src: '❤️', name: '❤️ Love', type: 'emoji', isPremium: false },
   { id: 'space', src: '🚀', name: '🚀 Galaxy', type: 'emoji', isPremium: false },
   { id: 'cat', src: '🐱', name: '🐱 Meow', type: 'emoji', isPremium: false },
   { id: 'custom', src: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-plus"><path d="M12 5v14M5 12h14"/></svg>', name: 'กำหนดเอง', type: 'custom', isPremium: false },
-
-  // Premium PNG Frames
-  // { id: 'heart-premium', src: '/frames/heart-frame.png', name: '💖 Premium Heart', type: 'image', isPremium: true },
-  // { id: 'stars-premium', src: '/frames/stars-frame.png', name: '⭐ Premium Stars', type: 'image', isPremium: true }
 ];
 
-// --- Helper: Render Frame Overlay as DOM Elements ---
-// --- Helper: Render Frame Overlay as DOM Elements ---
 const renderOverlayFrame = (
   id: string | null,
   customEmojis?: { topLeft: string, topRight: string, bottomLeft: string, bottomRight: string }
 ) => {
   if (!id || id === 'none') return null;
-
   const frame = overlayFrames.find(f => f.id === id);
   if (!frame) return null;
 
   if (frame.type === 'image') {
     return (
       <div className="absolute inset-0 z-20 pointer-events-none select-none">
-        <img
-          src={frame.src}
-          alt={frame.name}
-          className="w-full h-full object-fill opacity-90"
-          style={{ mixBlendMode: 'multiply' }} // Optional: adjust for how PNG frames should blend
-        />
+        <img src={frame.src} alt={frame.name} className="w-full h-full object-fill opacity-90" style={{ mixBlendMode: 'multiply' }} />
       </div>
     );
   }
 
   const styleBase = "absolute text-3xl md:text-4xl drop-shadow-md select-none z-20 pointer-events-none";
 
-  if (id === 'cute') return (
+  const renderEmojis = (tl: string, tr: string, bl: string, br: string) => (
     <>
-      <div className={`${styleBase} top-2 left-2`}>🧸</div>
-      <div className={`${styleBase} top-2 right-2`}>🎀</div>
-      <div className={`${styleBase} bottom-2 left-2`}>🌸</div>
-      <div className={`${styleBase} bottom-2 right-2`}>🍭</div>
-    </>
-  );
-  if (id === 'sparkle') return (
-    <>
-      <div className={`${styleBase} top-2 left-2`}>✨</div>
-      <div className={`${styleBase} top-2 right-2`}>💖</div>
-      <div className={`${styleBase} bottom-2 left-2`}>🌟</div>
-      <div className={`${styleBase} bottom-2 right-2`}>✨</div>
-    </>
-  );
-  if (id === 'nature') return (
-    <>
-      <div className={`${styleBase} top-2 left-2`}>🌿</div>
-      <div className={`${styleBase} top-2 right-2`}>🍃</div>
-      <div className={`${styleBase} bottom-2 left-2`}>🌼</div>
-      <div className={`${styleBase} bottom-2 right-2`}>🍄</div>
-    </>
-  );
-  if (id === 'cool') return (
-    <>
-      <div className={`${styleBase} top-2 left-2`}>😎</div>
-      <div className={`${styleBase} top-2 right-2`}>🔥</div>
-      <div className={`${styleBase} bottom-2 left-2`}>🎸</div>
-      <div className={`${styleBase} bottom-2 right-2`}>👾</div>
+      <div className={`${styleBase} top-2 left-2`}>{tl}</div>
+      <div className={`${styleBase} top-2 right-2`}>{tr}</div>
+      <div className={`${styleBase} bottom-2 left-2`}>{bl}</div>
+      <div className={`${styleBase} bottom-2 right-2`}>{br}</div>
     </>
   );
 
-  if (id === 'Chinese New Year') return (
-    <>
-      <div className={`${styleBase} top-2 left-2`}>🧧</div>
-      <div className={`${styleBase} top-2 right-2`}>🏮</div>
-      <div className={`${styleBase} bottom-2 left-2`}>🔴</div>
-      <div className={`${styleBase} bottom-2 right-2`}>🇨🇳</div>
-    </>
-  );
-  if (id === 'Christmas') return (
-    <>
-      <div className={`${styleBase} top-2 left-2`}>🎄</div>
-      <div className={`${styleBase} top-2 right-2`}>🎅</div>
-      <div className={`${styleBase} bottom-2 left-2`}>🎁</div>
-      <div className={`${styleBase} bottom-2 right-2`}>🦌</div>
-    </>
-  );
-
-
-  if (id === 'birthday') return (
-    <>
-      <div className={`${styleBase} top-2 left-2`}>🎂</div>
-      <div className={`${styleBase} top-2 right-2`}>🎈</div>
-      <div className={`${styleBase} bottom-2 left-2`}>🎉</div>
-      <div className={`${styleBase} bottom-2 right-2`}>🕯️</div>
-    </>
-  );
-
-  if (id === 'love') return (
-    <>
-      <div className={`${styleBase} top-2 left-2`}>❤️</div>
-      <div className={`${styleBase} top-2 right-2`}>💌</div>
-      <div className={`${styleBase} bottom-2 left-2`}>🌹</div>
-      <div className={`${styleBase} bottom-2 right-2`}>💋</div>
-    </>
-  );
-
-  if (id === 'space') return (
-    <>
-      <div className={`${styleBase} top-2 left-2`}>🚀</div>
-      <div className={`${styleBase} top-2 right-2`}>🪐</div>
-      <div className={`${styleBase} bottom-2 left-2`}>👽</div>
-      <div className={`${styleBase} bottom-2 right-2`}>🌠</div>
-    </>
-  );
-
-  if (id === 'cat') return (
-    <>
-      <div className={`${styleBase} top-2 left-2`}>🐱</div>
-      <div className={`${styleBase} top-2 right-2`}>🐾</div>
-      <div className={`${styleBase} bottom-2 left-2`}>🧶</div>
-      <div className={`${styleBase} bottom-2 right-2`}>🐟</div>
-    </>
-  );
-
-  if (id === 'custom') return (
-    <div className="absolute inset-0 pointer-events-none z-20">
-      <div className={`${styleBase} top-2 left-2`}>{customEmojis?.topLeft || '✨'}</div>
-      <div className={`${styleBase} top-2 right-2`}>{customEmojis?.topRight || '💖'}</div>
-      <div className={`${styleBase} bottom-2 left-2`}>{customEmojis?.bottomLeft || '🌟'}</div>
-      <div className={`${styleBase} bottom-2 right-2`}>{customEmojis?.bottomRight || '✨'}</div>
-    </div>
-  );
+  if (id === 'cute') return renderEmojis('🧸', '🎀', '🌸', '🍭');
+  if (id === 'sparkle') return renderEmojis('✨', '💖', '🌟', '✨');
+  if (id === 'nature') return renderEmojis('🌿', '🍃', '🌼', '🍄');
+  if (id === 'cool') return renderEmojis('😎', '🔥', '🎸', '👾');
+  if (id === 'Chinese New Year') return renderEmojis('🧧', '🏮', '🔴', '🇨🇳');
+  if (id === 'Christmas') return renderEmojis('🎄', '🎅', '🎁', '🦌');
+  if (id === 'birthday') return renderEmojis('🎂', '🎈', '🎉', '🕯️');
+  if (id === 'love') return renderEmojis('❤️', '💌', '🌹', '💋');
+  if (id === 'space') return renderEmojis('🚀', '🪐', '👽', '🌠');
+  if (id === 'cat') return renderEmojis('🐱', '🐾', '🧶', '🐟');
+  if (id === 'custom') return renderEmojis(customEmojis?.topLeft || '✨', customEmojis?.topRight || '💖', customEmojis?.bottomLeft || '🌟', customEmojis?.bottomRight || '✨');
   return null;
 };
 
-// --- 3. ฟังก์ชันแปลง Tailwind เป็น CSS (ปรับปรุงเพื่อรองรับฟิลเตอร์ใหม่ๆ) ---
 const convertTailwindToCssFilter = (classNameString: string) => {
   if (!classNameString) return 'none';
   const classes = classNameString.split(' ');
   const filters: string[] = [];
 
   classes.forEach(cls => {
-    // contrast
     if (cls.startsWith('contrast-')) {
       const val = cls.match(/contrast-\[?([\d.]+)%?\]?/);
       if (val) filters.push(`contrast(${val[1].includes('.') ? val[1] : parseInt(val[1]) / 100})`);
-      else {
-        const standardVal = parseInt(cls.replace('contrast-', ''));
-        filters.push(`contrast(${standardVal / 100})`);
-      }
-    }
-    // brightness
-    else if (cls.startsWith('brightness-')) {
+      else filters.push(`contrast(${parseInt(cls.replace('contrast-', '')) / 100})`);
+    } else if (cls.startsWith('brightness-')) {
       const val = cls.match(/brightness-\[?([\d.]+)%?\]?/);
       if (val) filters.push(`brightness(${val[1].includes('.') ? val[1] : parseInt(val[1]) / 100})`);
-      else {
-        const standardVal = parseInt(cls.replace('brightness-', ''));
-        filters.push(`brightness(${standardVal / 100})`);
-      }
-    }
-    // saturate
-    else if (cls.startsWith('saturate-')) {
+      else filters.push(`brightness(${parseInt(cls.replace('brightness-', '')) / 100})`);
+    } else if (cls.startsWith('saturate-')) {
       const val = cls.match(/saturate-\[?([\d.]+)%?\]?/);
       if (val) filters.push(`saturate(${val[1].includes('.') ? val[1] : parseInt(val[1]) / 100})`);
-      else {
-        const standardVal = parseInt(cls.replace('saturate-', ''));
-        filters.push(`saturate(${standardVal / 100})`);
-      }
-    }
-    // sepia
-    else if (cls.startsWith('sepia')) {
+      else filters.push(`saturate(${parseInt(cls.replace('saturate-', '')) / 100})`);
+    } else if (cls.startsWith('sepia')) {
       const val = cls.match(/sepia-\[?\.?([\d.]+)\]?/);
-      if (val) filters.push(`sepia(${val[1].startsWith('.') ? val[1] : val[1]})`);
+      if (val) filters.push(`sepia(${val[1]})`);
       else filters.push('sepia(1)');
-    }
-    // grayscale
-    else if (cls === 'grayscale') filters.push('grayscale(1)');
-    // invert
+    } else if (cls === 'grayscale') filters.push('grayscale(1)');
     else if (cls === 'invert') filters.push('invert(1)');
-    // hue-rotate
     else if (cls.startsWith('hue-rotate-')) {
       const val = cls.match(/hue-rotate-\[?(-?\d+)deg\]?/);
       if (val) filters.push(`hue-rotate(${val[1]}deg)`);
     }
-    // blur (optional, subtle)
-    else if (cls.startsWith('blur-')) {
-      const val = cls.match(/blur-\[?([\d.]+)px\]?/);
-      if (val) filters.push(`blur(${val[1]}px)`);
-    }
   });
-
   return filters.length > 0 ? filters.join(' ') : 'none';
 };
 
@@ -259,156 +141,70 @@ export default function PhotoEditor({ photos, onRetake, onRemovePhoto, filterId 
   const [selectedColor, setSelectedColor] = useState(frameColors[0]);
   const [customColor, setCustomColor] = useState('#ffffff');
   const [isCustomActive, setIsCustomActive] = useState(false);
-
-  // เปลี่ยนจาก Sticker เป็น Frame Overlay
   const [selectedFrameOverlay, setSelectedFrameOverlay] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
-
-  // Custom Emoji State
-  const [customEmojis, setCustomEmojis] = useState({
-    topLeft: '✨',
-    topRight: '💖',
-    bottomLeft: '🌟',
-    bottomRight: '✨'
-  });
+  const [customEmojis, setCustomEmojis] = useState({ topLeft: '✨', topRight: '💖', bottomLeft: '🌟', bottomRight: '✨' });
   const [activeEmojiCategory, setActiveEmojiCategory] = useState(0);
   const [emojiSearch, setEmojiSearch] = useState('');
-
-  // Runtime Emoji Data
   const [fetchedEmojis, setFetchedEmojis] = useState<Record<string, string[]>>(emojis);
   const [isEmojiLoading, setIsEmojiLoading] = useState(true);
   const [emojiFetchError, setEmojiFetchError] = useState<string | null>(null);
   const [dynamicCategories, setDynamicCategories] = useState<{ category: string, icons: string[] }[]>(commonEmojisFallback);
   const [activeCorner, setActiveCorner] = useState<'topLeft' | 'topRight' | 'bottomLeft' | 'bottomRight'>('topLeft');
-  const [fetchTrigger, setFetchTrigger] = useState(0); // For retry logic
-
-  // Filter State
+  const [fetchTrigger, setFetchTrigger] = useState(0);
   const [selectedFilter, setSelectedFilter] = useState<string>(filterId);
   const [favoriteFilters, setFavoriteFilters] = useState<string[]>([]);
-
   const [footerTitle, setFooterTitle] = useState('Photo Booth');
   const [footerSubtitle, setFooterSubtitle] = useState('2026 By PhotoCute');
+  const [activeTab, setActiveTab] = useState<'frame' | 'emoji' | 'filter' | 'text'>('frame');
 
   const stripRef = useRef<HTMLDivElement>(null);
 
-  // Load Favorites from LocalStorage
   React.useEffect(() => {
     const saved = localStorage.getItem('favoriteFilters');
-    if (saved) {
-      try {
-        setFavoriteFilters(JSON.parse(saved));
-      } catch (e) {
-        console.error('Failed to parse favoriteFilters', e);
-      }
-    }
+    if (saved) try { setFavoriteFilters(JSON.parse(saved)); } catch (e) { }
 
-    // Fetch Emojis from GitHub
     const fetchEmojis = async () => {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => {
-        controller.abort('timeout');
-      }, 10000); // 10s timeout
-
+      const timeoutId = setTimeout(() => controller.abort('timeout'), 10000);
       try {
         setIsEmojiLoading(true);
         setEmojiFetchError(null);
-
-        // 1. Fetch search library
-        const searchResp = await fetch('https://raw.githubusercontent.com/muan/emojilib/main/dist/emoji-en-US.json', {
-          signal: controller.signal
-        });
-        if (searchResp.ok) {
-          const data = await searchResp.json();
-          setFetchedEmojis(data);
-        }
-
-        // 2. Fetch categorized library (gemoji)
-        const catResp = await fetch('https://raw.githubusercontent.com/github/gemoji/master/db/emoji.json', {
-          signal: controller.signal
-        });
+        const searchResp = await fetch('https://raw.githubusercontent.com/muan/emojilib/main/dist/emoji-en-US.json', { signal: controller.signal });
+        if (searchResp.ok) setFetchedEmojis(await searchResp.json());
+        const catResp = await fetch('https://raw.githubusercontent.com/github/gemoji/master/db/emoji.json', { signal: controller.signal });
         if (catResp.ok) {
           const catData = await catResp.json();
-          // Group by category
           const groups: Record<string, string[]> = {};
           const heartIcons: string[] = [];
-
           catData.forEach((item: any) => {
-            // Extract hearts for dedicated category
-            const isHeart = item.description?.toLowerCase().includes('heart') ||
-              item.category?.toLowerCase().includes('heart') ||
-              item.aliases?.some((a: string) => a.toLowerCase().includes('heart')) ||
-              item.tags?.some((t: string) => t.toLowerCase().includes('heart'));
-
-            if (isHeart) {
-              heartIcons.push(item.emoji);
-            }
-
+            const isHeart = item.description?.toLowerCase().includes('heart') || item.category?.toLowerCase().includes('heart') || item.aliases?.some((a: string) => a.toLowerCase().includes('heart'));
+            if (isHeart) heartIcons.push(item.emoji);
             if (!groups[item.category]) groups[item.category] = [];
             groups[item.category].push(item.emoji);
           });
-
-          let formatted = Object.entries(groups).map(([name, icons]) => ({
-            category: name,
-            icons: icons.slice(0, 48) // Limit icons per category for UI performance
-          }));
-
-          // Prepend Dedicated Heart Category
-          if (heartIcons.length > 0) {
-            // Remove duplicates and limit
-            const uniqueHearts = Array.from(new Set(heartIcons)).slice(0, 48);
-            formatted = [
-              { category: 'heart', icons: uniqueHearts },
-              ...formatted
-            ];
-          }
-
+          let formatted = Object.entries(groups).map(([name, icons]) => ({ category: name, icons: icons.slice(0, 48) }));
+          if (heartIcons.length > 0) formatted = [{ category: 'heart', icons: Array.from(new Set(heartIcons)).slice(0, 48) }, ...formatted];
           setDynamicCategories(formatted);
         }
       } catch (error: any) {
-        // Only log and show error if it's NOT a manual abort from unmount
-        if (error.name === 'AbortError') {
-          if (controller.signal.reason === 'timeout') {
-            console.warn('Emoji fetch timed out');
-            setEmojiFetchError('การเชื่อมต่อกับ GitHub ใช้เวลานานเกินไป (Timeout)');
-          }
-          // Silent for other aborts (unmount)
-        } else {
-          console.error('Failed to fetch emojis from Git:', error);
-          setEmojiFetchError('ไม่สามารถโหลดอิโมจิจาก GitHub ได้ กรุณาลองใหม่อีกครั้ง');
-        }
+        if (error.name !== 'AbortError') setEmojiFetchError('ไม่สามารถโหลดอิโมจิได้');
       } finally {
         clearTimeout(timeoutId);
         setIsEmojiLoading(false);
       }
-
-      // Cleanup function to abort if component unmounts or trigger changes
-      return () => {
-        controller.abort('unmount');
-        clearTimeout(timeoutId);
-      };
     };
-
-    const cleanup = fetchEmojis();
-    return () => {
-      cleanup.then(abortFn => abortFn?.());
-    };
+    fetchEmojis();
   }, [fetchTrigger]);
 
-  // Save Favorites to LocalStorage
-  React.useEffect(() => {
-    localStorage.setItem('favoriteFilters', JSON.stringify(favoriteFilters));
-  }, [favoriteFilters]);
+  React.useEffect(() => { localStorage.setItem('favoriteFilters', JSON.stringify(favoriteFilters)); }, [favoriteFilters]);
 
   const toggleFavorite = (e: React.MouseEvent, filterId: string) => {
     e.stopPropagation();
-    setFavoriteFilters(prev =>
-      prev.includes(filterId)
-        ? prev.filter(id => id !== filterId)
-        : [...prev, filterId]
-    );
+    setFavoriteFilters(prev => prev.includes(filterId) ? prev.filter(id => id !== filterId) : [...prev, filterId]);
   };
 
-  const sortedFilters = React.useMemo(() => {
+  const sortedFilters = useMemo(() => {
     return [...filters].sort((a, b) => {
       const aIsFav = favoriteFilters.includes(a.id);
       const bIsFav = favoriteFilters.includes(b.id);
@@ -420,19 +216,13 @@ export default function PhotoEditor({ photos, onRetake, onRemovePhoto, filterId 
 
   const activeFilterClass = filters.find(f => f.id === selectedFilter)?.class || '';
 
-  // --- ฟังก์ชันดาวน์โหลด (ปรับปรุงเพื่อรองรับมือถือ) ---
   const handleDownload = async () => {
     if (stripRef.current && !loading) {
       try {
         setLoading(true);
-        // รอให้ UI และรูปภาพโหลดนิ่งก่อนเริ่มจัดการ
         await new Promise(resolve => setTimeout(resolve, 500));
-
-        const currentFilterClass = filters.find(f => f.id === selectedFilter)?.class || '';
-        const cssFilter = convertTailwindToCssFilter(currentFilterClass);
+        const cssFilter = convertTailwindToCssFilter(activeFilterClass);
         const processedImages = new Map<number, string>();
-
-        // Bake Filter ลงรูป (ถ้าเบราว์เซอร์รองรับ)
         const imageElements = stripRef.current.querySelectorAll('.photo-item');
         await Promise.all(Array.from(imageElements).map(async (img: any, index) => {
           const canvas = document.createElement('canvas');
@@ -440,17 +230,14 @@ export default function PhotoEditor({ photos, onRetake, onRemovePhoto, filterId 
           canvas.height = img.naturalHeight || img.height;
           const ctx = canvas.getContext('2d');
           if (ctx) {
-            // เช็คว่าเบราว์เซอร์รองรับ filter บน canvas หรือไม่
-            if (cssFilter !== 'none' && 'filter' in ctx) {
-              ctx.filter = cssFilter;
-            }
+            if (cssFilter !== 'none' && 'filter' in ctx) ctx.filter = cssFilter;
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
             processedImages.set(index, canvas.toDataURL('image/png'));
           }
         }));
 
         const canvas = await html2canvas(stripRef.current, {
-          scale: 2, // ปรับลดจาก 4 เหลือ 2 เพื่อประหยัด RAM บนมือถือ (ช่วยลดปัญหาเปิดรูปไม่ขึ้น)
+          scale: 2,
           useCORS: true,
           allowTaint: true,
           backgroundColor: null,
@@ -458,7 +245,6 @@ export default function PhotoEditor({ photos, onRetake, onRemovePhoto, filterId 
           onclone: (clonedDoc) => {
             const container = clonedDoc.querySelector('.photo-strip-container') as HTMLElement;
             if (container) container.style.transform = 'none';
-
             if (processedImages.size > 0) {
               const clonedImages = clonedDoc.querySelectorAll('.photo-item');
               clonedImages.forEach((img: any, index) => {
@@ -471,37 +257,16 @@ export default function PhotoEditor({ photos, onRetake, onRemovePhoto, filterId 
           }
         });
 
-        // แปลงเป็น Blob เพื่อความชัวร์บนมือถือ
         canvas.toBlob(async (blob) => {
           if (!blob) throw new Error('Canvas to Blob failed');
-
           const fileName = `photocute-${Date.now()}.png`;
           const file = new File([blob], fileName, { type: 'image/png' });
-
-          // ตรวจสอบว่ามือถือรองรับ Web Share API หรือไม่ (เช่น iOS Safari, Android Chrome)
           if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-            try {
-              await navigator.share({
-                files: [file],
-                title: 'รูปถ่ายจาก PhotoCute',
-                text: 'บันทึกรูปนี้จากบูธถ่ายภาพของเรา!',
-              });
-            } catch (shareErr: any) {
-              if (shareErr.name !== 'AbortError') {
-                console.error("Share failed:", shareErr);
-                // ถ้าแชร์ล้มเหลว ให้ลองดาวน์โหลดแบบปกติสำรอง
-                fallbackDownload(blob, fileName);
-              }
-            }
-          } else {
-            // สำหรับ Desktop หรือเบราว์เซอร์ที่ไม่รองรับ Share API
-            fallbackDownload(blob, fileName);
-          }
+            try { await navigator.share({ files: [file], title: 'PhotoCute', text: 'Boom!' }); } catch (shareErr: any) { if (shareErr.name !== 'AbortError') fallbackDownload(blob, fileName); }
+          } else { fallbackDownload(blob, fileName); }
           setLoading(false);
         }, 'image/png');
-
       } catch (err) {
-        console.error("Save failed:", err);
         alert("เกิดข้อผิดพลาด: " + err);
         setLoading(false);
       }
@@ -519,21 +284,20 @@ export default function PhotoEditor({ photos, onRetake, onRemovePhoto, filterId 
     setTimeout(() => URL.revokeObjectURL(url), 100);
   };
 
-
   return (
-    <div className="min-h-screen bg-[#FFF0F5] flex flex-col items-center py-8 font-sans">
-
-      <h1 className="text-xl md:text-2xl font-bold text-pink-500 mb-8 text-center px-4">
+    <div className="min-h-screen bg-[#FFF0F5] flex flex-col items-center font-sans h-screen overflow-hidden">
+      {/* Header - Hidden on mobile to save space */}
+      <h1 className="hidden md:block text-xl md:text-2xl font-bold text-pink-500 my-4 text-center px-4">
         Photo Booth By PhotoCute
       </h1>
 
-      <div className="flex flex-col md:flex-row gap-8 items-start justify-center w-full max-w-5xl px-4">
+      <div className="flex flex-col md:flex-row items-center md:items-start justify-center w-full max-w-6xl h-full md:p-4 overflow-hidden gap-4">
 
-
-        <div className="flex-shrink-0 mx-auto md:mx-0">
+        {/* --- LEFT: Shared Preview (Sticky on Mobile) --- */}
+        <div className="w-full md:w-auto flex-shrink-0 flex justify-center bg-[#FFF0F5] md:bg-transparent p-4 md:p-0 z-20 shadow-sm md:shadow-none">
           <div
             ref={stripRef}
-            className="photo-strip-container relative p-4 md:p-6 shadow-2xl transition-all duration-300 ease-in-out flex flex-col items-center gap-4 overflow-hidden"
+            className="photo-strip-container relative p-4 md:p-6 shadow-2xl transition-all duration-300 ease-in-out flex flex-col items-center gap-4 overflow-hidden origin-top scale-[0.6] sm:scale-[0.8] md:scale-100"
             style={{
               minWidth: '320px',
               maxWidth: '380px',
@@ -541,325 +305,161 @@ export default function PhotoEditor({ photos, onRetake, onRemovePhoto, filterId 
               color: (isCustomActive && customColor === '#000000') || (!isCustomActive && selectedColor.id === 'black') ? 'white' : '#333'
             }}
           >
-            {/* Grid รูปภาพ */}
             <div className={`grid gap-3 w-full relative z-10 ${photos.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
               {photos.map((img, idx) => (
-                <div
-                  key={idx}
-                  className="relative aspect-[3/4] overflow-hidden group bg-white"
-                >
+                <div key={idx} className="relative aspect-[3/4] overflow-hidden group bg-white">
                   <img
                     src={img}
                     alt={`snap-${idx}`}
                     className={`photo-item w-full h-full object-cover ${activeFilterClass}`}
-                    style={{
-                      transform: 'translateZ(0)',
-                      filter: convertTailwindToCssFilter(activeFilterClass),
-                      WebkitFilter: convertTailwindToCssFilter(activeFilterClass)
-                    }}
+                    style={{ transform: 'translateZ(0)', filter: convertTailwindToCssFilter(activeFilterClass) }}
                   />
-
-
                 </div>
               ))}
             </div>
-
-            {/* --- 🖼️ ส่วนแสดงกรอบรูป (Frame Overlay) --- */}
             {renderOverlayFrame(selectedFrameOverlay, customEmojis)}
-
-            {/* Footer Text */}
-            <div
-              className="mt-4 text-center font-bold tracking-widest uppercase opacity-80 break-words w-full px-2 relative z-30"
-              style={{ color: 'inherit' }}
-            >
+            <div className="mt-4 text-center font-bold tracking-widest uppercase opacity-80 break-words w-full px-2 relative z-30" style={{ color: 'inherit' }}>
               <div className="text-sm">{footerTitle}</div>
               <div className="text-[10px] mt-1 font-medium opacity-70">{footerSubtitle}</div>
             </div>
           </div>
         </div>
 
-        {/* --- RIGHT: Tools Panel --- */}
-        <div className="flex-1 w-full max-w-md bg-white/80 backdrop-blur-sm p-6 rounded-[2rem] shadow-lg border border-white/50">
+        {/* --- RIGHT: Tools Panel (Bottom Sheet style on Mobile) --- */}
+        <div className="flex-1 w-full bg-white md:bg-white/80 md:backdrop-blur-sm rounded-t-[2.5rem] md:rounded-[2rem] shadow-2xl md:shadow-lg border-t md:border border-white/50 flex flex-col overflow-hidden">
 
-          {/* 1. Color Picker */}
-          <div className="mb-6">
-            <h3 className="text-sm font-bold text-gray-700 mb-3">สีพื้นหลัง</h3>
-            <div className="flex flex-wrap gap-3 max-h-[160px] overflow-y-auto p-1 scrollbar-thin scrollbar-thumb-pink-200">
-              {frameColors.map((color) => (
-
-                <button
-                  key={color.id}
-                  onClick={() => {
-                    if (color.isPremium) {
-                      // สามารถเปลี่ยนเป็นเปิด Modal จ่ายเงินตรงนี้
-                      alert('🔒 กรอบนี้สำหรับสมาชิก Premium (Demo)');
-                    }
-
-                    setIsCustomActive(false);
-                    setSelectedColor(color);
-                  }}
-                  className={`w-8 h-8 rounded-full border-2 transform transition-all duration-200 hover:scale-110 active:scale-95 shadow-sm ${(!isCustomActive && selectedColor.id === color.id) ? 'border-pink-500 scale-110' : 'border-white/50'}`}
-                  style={{ background: color.hex }}
-                  title={color.id}
-                >
-                  {color.isPremium && (
-                    <div className="absolute -top-1 -right-1 bg-white rounded-full p-0.5 shadow-sm">
-                      <Lock size={8} className="text-pink-500" />
-                    </div>
-                  )}
-                </button>
-              ))}
-
-              {/* Custom Color Picker */}
-              <div className="relative group">
-                <input
-                  type="color"
-                  value={customColor}
-                  onChange={(e) => {
-                    setCustomColor(e.target.value);
-                    setIsCustomActive(true);
-                  }}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                />
-                <button
-                  className={`w-8 h-8 rounded-full border-2 flex items-center justify-center transform transition-all duration-200 hover:scale-110 active:scale-95 shadow-sm ${isCustomActive ? 'border-pink-500 scale-110' : 'border-white/50'}`}
-                  style={{ background: customColor }}
-                  title="เลือกสีเอง"
-                >
-                  <Sparkles size={14} className={isCustomActive ? 'text-pink-500' : 'text-gray-400'} />
-                </button>
-              </div>
-            </div>
+          {/* Tab Navigation */}
+          <div className="flex justify-around items-center border-b border-gray-100 p-2 md:p-4 bg-white/50">
+            <button onClick={() => setActiveTab('frame')} className={`flex flex-col items-center p-2 rounded-2xl transition-all ${activeTab === 'frame' ? 'text-pink-500 bg-pink-50' : 'text-gray-400'}`}>
+              <Palette size={20} />
+              <span className="text-[10px] font-bold mt-1">กรอบ/สี</span>
+            </button>
+            <button onClick={() => setActiveTab('emoji')} className={`flex flex-col items-center p-2 rounded-2xl transition-all ${activeTab === 'emoji' ? 'text-pink-500 bg-pink-50' : 'text-gray-400'}`}>
+              <Smile size={20} />
+              <span className="text-[10px] font-bold mt-1">อิโมจิ</span>
+            </button>
+            <button onClick={() => setActiveTab('filter')} className={`flex flex-col items-center p-2 rounded-2xl transition-all ${activeTab === 'filter' ? 'text-pink-500 bg-pink-50' : 'text-gray-400'}`}>
+              <Sparkles size={20} />
+              <span className="text-[10px] font-bold mt-1">ฟิลเตอร์</span>
+            </button>
+            <button onClick={() => setActiveTab('text')} className={`flex flex-col items-center p-2 rounded-2xl transition-all ${activeTab === 'text' ? 'text-pink-500 bg-pink-50' : 'text-gray-400'}`}>
+              <Type size={20} />
+              <span className="text-[10px] font-bold mt-1">ข้อความ</span>
+            </button>
           </div>
 
-
-
-          {/* 2. Frame Overlay Picker (เปลี่ยนจาก Sticker เป็น Frame) */}
-          <div className="mb-8">
-            <h3 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
-              <ImageIcon size={16} /> กรอบรูป
-            </h3>
-            <div className="grid grid-cols-4 gap-3">
-              {overlayFrames.map((frame) => (
-                <button
-                  key={frame.id}
-                  onClick={() => {
-                    if (frame.isPremium) {
-                      alert('🔒 กรอบนี้สำหรับสมาชิก Premium (Demo)');
-                    }
-                    setSelectedFrameOverlay(frame.id);
-                  }}
-                  className={`
-                    aspect-square rounded-xl flex items-center justify-center overflow-hidden transition-all relative
-                    ${selectedFrameOverlay === frame.id
-                      ? 'border-2 border-pink-500 ring-2 ring-pink-100 bg-pink-50'
-                      : 'border border-gray-200 hover:bg-gray-50'}
-                  `}
-                >
-                  {frame.isPremium && (
-                    <div className="absolute top-1 right-1 z-10 bg-pink-500 rounded-full p-0.5 shadow-sm">
-                      <Lock size={10} className="text-white" />
-                    </div>
-                  )}
-
-                  {frame.id === 'none' ? (
-                    <Ban size={24} className="text-gray-400" />
-                  ) : frame.type === 'image' ? (
-                    <img src={frame.src} alt={frame.name} className="w-full h-full object-cover" />
-                  ) : frame.src.startsWith('<svg') ? (
-                    <div className="text-pink-400 scale-125 transition-transform" dangerouslySetInnerHTML={{ __html: frame.src }} />
-                  ) : (
-                    <span className="text-2xl">{frame.src}</span>
-                  )}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* 2.5 Custom Emoji Editor (Visible only when 'custom' frame is selected) */}
-          {selectedFrameOverlay === 'custom' && (
-            <div className="mb-6 animate-in slide-in-from-top-2 duration-300">
-              <h3 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
-                <Star size={16} className="text-yellow-400" /> เลือกอิโมจิเอง
-              </h3>
-              <div className="grid grid-cols-2 gap-3 bg-pink-50/50 p-4 rounded-2xl border border-pink-100 mb-4">
-                <div className={`flex flex-col gap-1 p-2 rounded-xl transition-all cursor-pointer ${activeCorner === 'topLeft' ? 'bg-pink-100 ring-1 ring-pink-300' : 'hover:bg-pink-50'}`} onClick={() => setActiveCorner('topLeft')}>
-                  <span className="text-[10px] text-gray-400 font-bold uppercase ml-1">มุมซ้ายบน</span>
-                  <div className="w-full py-2 text-center text-xl bg-white rounded-lg border border-pink-50">{customEmojis.topLeft}</div>
-                </div>
-                <div className={`flex flex-col gap-1 p-2 rounded-xl transition-all cursor-pointer ${activeCorner === 'topRight' ? 'bg-pink-100 ring-1 ring-pink-300' : 'hover:bg-pink-50'}`} onClick={() => setActiveCorner('topRight')}>
-                  <span className="text-[10px] text-gray-400 font-bold uppercase ml-1 text-right">มุมขวาบน</span>
-                  <div className="w-full py-2 text-center text-xl bg-white rounded-lg border border-pink-50">{customEmojis.topRight}</div>
-                </div>
-                <div className={`flex flex-col gap-1 p-2 rounded-xl transition-all cursor-pointer ${activeCorner === 'bottomLeft' ? 'bg-pink-100 ring-1 ring-pink-300' : 'hover:bg-pink-50'}`} onClick={() => setActiveCorner('bottomLeft')}>
-                  <span className="text-[10px] text-gray-400 font-bold uppercase ml-1">มุมซ้ายล่าง</span>
-                  <div className="w-full py-2 text-center text-xl bg-white rounded-lg border border-pink-50">{customEmojis.bottomLeft}</div>
-                </div>
-                <div className={`flex flex-col gap-1 p-2 rounded-xl transition-all cursor-pointer ${activeCorner === 'bottomRight' ? 'bg-pink-100 ring-1 ring-pink-300' : 'hover:bg-pink-50'}`} onClick={() => setActiveCorner('bottomRight')}>
-                  <span className="text-[10px] text-gray-400 font-bold uppercase ml-1 text-right">มุมขวาล่าง</span>
-                  <div className="w-full py-2 text-center text-xl bg-white rounded-lg border border-pink-50">{customEmojis.bottomRight}</div>
-                </div>
-              </div>
-
-              {/* Emoji Picker */}
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-inner overflow-hidden">
-                {/* Search Bar */}
-                <div className="p-2 border-b border-gray-50 flex gap-2 items-center bg-gray-50/30">
-                  <div className="relative flex-1">
-                    <input
-                      type="text"
-                      placeholder="ค้นหาอิโมจิ"
-                      value={emojiSearch}
-                      onChange={(e) => setEmojiSearch(e.target.value)}
-                      className="w-full pl-8 pr-3 py-1.5 text-xs bg-white rounded-lg border border-pink-100 focus:border-pink-300 outline-none shadow-sm"
-                    />
-                    <Sparkles size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-pink-300" />
-                    {emojiSearch && (
+          <div className="flex-1 overflow-y-auto p-6 pb-24 md:pb-6 custom-scrollbar">
+            {activeTab === 'frame' && (
+              <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <section className="mb-6">
+                  <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">สีพื้นหลัง / กราเดียนท์</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {frameColors.map((color) => (
                       <button
-                        onClick={() => setEmojiSearch('')}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-pink-500"
-                      >
-                        <X size={12} />
-                      </button>
-                    )}
+                        key={color.id}
+                        onClick={() => { setIsCustomActive(false); setSelectedColor(color); }}
+                        className={`w-10 h-10 rounded-full border-2 transform transition-all shadow-sm ${(!isCustomActive && selectedColor.id === color.id) ? 'border-pink-500 scale-110' : 'border-white'}`}
+                        style={{ background: color.hex }}
+                      />
+                    ))}
+                    <div className="relative w-10 h-10 rounded-full border-2 border-white shadow-sm flex items-center justify-center overflow-hidden" style={{ background: customColor }}>
+                      <input type="color" value={customColor} onChange={(e) => { setCustomColor(e.target.value); setIsCustomActive(true); }} className="absolute inset-0 opacity-0 cursor-pointer" />
+                      <Sparkles size={16} className={isCustomActive ? 'text-pink-500' : 'text-gray-400'} />
+                    </div>
                   </div>
-                </div>
-
-                {/* Categories - Only show when NOT searching */}
-                {!emojiSearch && (
-                  <div className="flex overflow-x-auto border-b border-gray-50 scrollbar-hide">
-                    {dynamicCategories.map((cat, idx) => (
+                </section>
+                <section>
+                  <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">รูปแบบกรอบ</h3>
+                  <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-4 gap-2">
+                    {overlayFrames.map((frame) => (
                       <button
-                        key={cat.category}
-                        onClick={() => setActiveEmojiCategory(idx)}
-                        className={`px-3 py-2 text-[10px] font-bold whitespace-nowrap transition-colors ${activeEmojiCategory === idx ? 'bg-pink-50 text-pink-500 border-b-2 border-pink-500' : 'text-gray-400 hover:bg-gray-50'}`}
+                        key={frame.id}
+                        onClick={() => setSelectedFrameOverlay(frame.id)}
+                        className={`aspect-square rounded-xl flex items-center justify-center transition-all ${selectedFrameOverlay === frame.id ? 'bg-pink-100 border-2 border-pink-400' : 'bg-gray-50 border border-gray-100'}`}
                       >
-                        {cat.category}
+                        {frame.id === 'none' ? <Ban className="text-gray-300" /> : <span className="text-xl">{frame.src.startsWith('<svg') ? '+' : frame.src}</span>}
                       </button>
                     ))}
                   </div>
-                )}
+                </section>
+              </div>
+            )}
 
-                <div className="p-3 grid grid-cols-4 gap-2 h-[160px] overflow-y-auto custom-scrollbar">
-                  {isEmojiLoading && !emojiSearch ? (
-                    <div className="col-span-4 h-full flex items-center justify-center flex-col gap-2 text-gray-400">
-                      <RefreshCw size={24} className="animate-spin text-pink-300" />
-                      <span className="text-[10px]">กำลังโหลดอิโมจิจาก GitHub...</span>
-                    </div>
-                  ) : emojiFetchError && !emojiSearch ? (
-                    <div className="col-span-4 h-full flex items-center justify-center flex-col gap-2 p-4 text-center">
-                      <Ban size={24} className="text-pink-300" />
-                      <span className="text-[10px] text-gray-500 leading-tight">{emojiFetchError}</span>
-                      <button
-                        onClick={() => setFetchTrigger(prev => prev + 1)}
-                        className="mt-1 px-3 py-1 bg-pink-500 text-white text-[10px] rounded-full font-bold hover:bg-pink-600 transition-colors"
-                      >
-                        ลองใหม่
-                      </button>
-                      <span className="text-[9px] text-gray-400 mt-1 italic">(กำลังใช้อิโมจิสำรองแบบออฟไลน์)</span>
-                    </div>
-                  ) : emojiSearch ? (
-                    // Search Results
-                    Object.entries(fetchedEmojis)
-                      .filter(([emoji, keywords]) =>
-                        keywords.some(k => k.toLowerCase().includes(emojiSearch.toLowerCase()))
-                      )
-                      .slice(0, 100) // Limit results for performance
-                      .map(([emoji], idx) => (
-                        <button
-                          key={idx}
-                          onClick={() => {
-                            setCustomEmojis(prev => ({ ...prev, [activeCorner]: emoji }));
-                            // setEmojiSearch(''); // Optional: clear search after picking
-                          }}
-                          className="aspect-square flex items-center justify-center text-2xl hover:bg-pink-50 rounded-lg transition-all active:scale-90"
-                        >
-                          {emoji}
-                        </button>
-                      ))
-                  ) : (
-                    // Categorized Icons
-                    dynamicCategories[activeEmojiCategory]?.icons.map((emoji, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => setCustomEmojis(prev => ({ ...prev, [activeCorner]: emoji }))}
-                        className="aspect-square flex items-center justify-center text-2xl hover:bg-pink-50 rounded-lg transition-all active:scale-90"
-                      >
-                        {emoji}
-                      </button>
-                    ))
-                  )}
-
-                  {emojiSearch && Object.entries(fetchedEmojis).filter(([emoji, keywords]) =>
-                    keywords.some(k => k.toLowerCase().includes(emojiSearch.toLowerCase()))
-                  ).length === 0 && (
-                      <div className="col-span-4 py-8 text-center text-gray-400 text-xs flex flex-col items-center gap-2">
-                        <span>ไม่พบอิโมจิที่ค้นหา 😿</span>
-                        <button
-                          onClick={() => setEmojiSearch('')}
-                          className="text-pink-500 hover:underline"
-                        >
-                          ล้างการค้นหา
-                        </button>
-                      </div>
-                    )}
+            {activeTab === 'emoji' && (
+              <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <div className="grid grid-cols-2 gap-2 mb-4">
+                  {(['topLeft', 'topRight', 'bottomLeft', 'bottomRight'] as const).map(corner => (
+                    <button key={corner} onClick={() => setActiveCorner(corner)} className={`p-3 rounded-2xl border transition-all ${activeCorner === corner ? 'bg-pink-50 border-pink-300 shadow-sm' : 'border-gray-100 bg-gray-50'}`}>
+                      <span className="text-[10px] text-gray-400 block mb-1 uppercase text-center font-bold">{corner}</span>
+                      <div className="text-2xl text-center">{(customEmojis as any)[corner]}</div>
+                    </button>
+                  ))}
                 </div>
-                <div className="p-2 bg-gray-50 text-[10px] text-gray-400 text-center italic border-t border-gray-100">
-                  {emojiSearch ? `ผลการค้นหาสำหรับ "${emojiSearch}"` : 'คลิกที่มุมด้านบนแล้วเลือกอิโมจิที่ต้องการ ✨'}
+                <div className="bg-gray-50 rounded-2xl border border-gray-100 overflow-hidden">
+                  <div className="p-3 border-b flex gap-2">
+                    <input type="text" placeholder="ค้นหา..." value={emojiSearch} onChange={e => setEmojiSearch(e.target.value)} className="flex-1 px-3 py-2 text-sm rounded-xl border border-pink-100 outline-none focus:ring-2 focus:ring-pink-200" />
+                  </div>
+                  <div className="p-3 grid grid-cols-6 gap-2 h-48 overflow-y-auto">
+                    {isEmojiLoading ? <div className="col-span-6 text-center text-gray-400 text-xs py-10">กำลังโหลด...</div> : (
+                      (emojiSearch ? Object.entries(fetchedEmojis).filter(([e, k]) => k.some(ki => ki.includes(emojiSearch.toLowerCase()))).slice(0, 72).map(([e]) => e) : dynamicCategories[activeEmojiCategory]?.icons || [])
+                        .map((emoji, i) => (
+                          <button key={i} onClick={() => setCustomEmojis(p => ({ ...p, [activeCorner]: emoji }))} className="text-2xl h-10 flex items-center justify-center hover:bg-white rounded-lg transition-transform active:scale-90">{emoji}</button>
+                        ))
+                    )}
+                  </div>
+                  {!emojiSearch && (
+                    <div className="flex overflow-x-auto p-2 bg-white border-t border-gray-100">
+                      {dynamicCategories.map((cat, i) => (
+                        <button key={cat.category} onClick={() => setActiveEmojiCategory(i)} className={`px-3 py-1.5 rounded-full text-[10px] whitespace-nowrap mr-2 font-bold ${activeEmojiCategory === i ? 'bg-pink-500 text-white' : 'text-gray-400 hover:bg-gray-50'}`}>{cat.category}</button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
-            </div>
-          )}
-          {/* 3. Filters Slider */}
-          <div className="mb-6">
-            <h3 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
-              <Sparkles className="text-pink-500" size={16} /> ฟิลเตอร์
-            </h3>
-            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-              {sortedFilters.map((filter) => {
-                const isActive = selectedFilter === filter.id;
-                const isFav = favoriteFilters.includes(filter.id);
-                return (
-                  <button
-                    key={filter.id}
-                    onClick={() => setSelectedFilter(filter.id)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all border ${isActive ? 'bg-pink-50 border-pink-400 text-pink-500' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}
-                  >
-                    <span
-                      onClick={(e) => toggleFavorite(e, filter.id)}
-                      className={`transition-colors ${isFav ? 'text-yellow-400' : 'text-gray-300 hover:text-yellow-200'}`}
-                    >
-                      <Star size={12} fill={isFav ? 'currentColor' : 'none'} />
-                    </span>
-                    {filter.name}
-                  </button>
-                );
-              })}
-            </div>
+            )}
+
+            {activeTab === 'filter' && (
+              <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <div className="grid grid-cols-3 gap-3">
+                  {sortedFilters.map(f => {
+                    const isF = favoriteFilters.includes(f.id);
+                    return (
+                      <button key={f.id} onClick={() => setSelectedFilter(f.id)} className={`flex flex-col items-center p-3 rounded-2xl border transition-all ${selectedFilter === f.id ? 'bg-pink-50 border-pink-300' : 'bg-gray-50 border-gray-100'}`}>
+                        <div className="relative mb-2">
+                          <div className={`w-12 h-12 rounded-lg bg-gray-200 ${f.class}`} />
+                          <div onClick={e => toggleFavorite(e, f.id)} className={`absolute -top-2 -right-2 p-1 rounded-full shadow-sm bg-white ${isF ? 'text-yellow-400' : 'text-gray-300'}`}>
+                            <Star size={10} fill={isF ? 'currentColor' : 'none'} />
+                          </div>
+                        </div>
+                        <span className="text-[10px] font-bold text-center">{f.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'text' && (
+              <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 space-y-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">หัวข้อหลัก</label>
+                  <input type="text" value={footerTitle} onChange={e => setFooterTitle(e.target.value)} className="w-full px-4 py-3 rounded-2xl border border-gray-100 focus:ring-2 focus:ring-pink-200 outline-none" placeholder="Photo Booth" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">คำอธิบาย</label>
+                  <input type="text" value={footerSubtitle} onChange={e => setFooterSubtitle(e.target.value)} className="w-full px-4 py-3 rounded-2xl border border-gray-100 focus:ring-2 focus:ring-pink-200 outline-none" placeholder="2024 By PhotoCute" />
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* 4. Text Editor */}
-          <div className="mb-6">
-            <h3 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
-              <Type size={16} /> ข้อความ 🩷 (สามารถแก้ไขได้)
-            </h3>
-            <div className="flex flex-col gap-3 bg-white/50 p-4 rounded-2xl border border-white">
-              <input type="text" value={footerTitle} onChange={(e) => setFooterTitle(e.target.value)} className="w-full px-3 py-2 rounded-xl text-sm outline-none" maxLength={25} />
-              <input type="text" value={footerSubtitle} onChange={(e) => setFooterSubtitle(e.target.value)} className="w-full px-3 py-2 rounded-xl text-sm outline-none" maxLength={30} />
-            </div>
-          </div>
-
-          {/* 4. Action Buttons */}
-          <div className="flex gap-4">
-            <button
-              onClick={handleDownload}
-              disabled={loading}
-              className="flex-1 bg-[#FF5C8D] hover:bg-[#ff407b] text-white py-3.5 rounded-full font-bold shadow-lg flex justify-center items-center gap-2 transition-all active:scale-95 disabled:opacity-50"
-            >
+          {/* Persistent Action Buttons */}
+          <div className="absolute md:relative bottom-0 left-0 right-0 p-4 md:p-6 bg-white/90 backdrop-blur-md md:bg-transparent border-t md:border-t-0 flex gap-4 z-40">
+            <button onClick={handleDownload} disabled={loading} className="flex-1 bg-pink-500 hover:bg-pink-600 text-white py-4 rounded-full font-bold shadow-xl flex justify-center items-center gap-2 transition-all active:scale-95 disabled:opacity-50">
               {loading ? <RefreshCw className="animate-spin" size={20} /> : <Download size={20} />}
               {loading ? 'กำลังประมวลผล...' : 'ดาวน์โหลด'}
             </button>
-            <button onClick={onRetake} disabled={loading} className="flex-1 bg-white border-2 border-pink-200 text-pink-500 hover:bg-pink-50 py-3.5 rounded-full font-bold flex justify-center items-center gap-2 transition-all active:scale-95 disabled:opacity-50">
+            <button onClick={onRetake} disabled={loading} className="flex-1 bg-white border-2 border-pink-100 text-pink-400 hover:bg-pink-50 py-4 rounded-full font-bold shadow-sm flex justify-center items-center gap-2 transition-all active:scale-95">
               <RefreshCw size={20} /> ถ่ายใหม่
             </button>
           </div>
