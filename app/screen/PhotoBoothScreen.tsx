@@ -154,8 +154,19 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
+      if (!file.type.startsWith('image/')) {
+        alert("กรุณาเลือกไฟล์รูปภาพเท่านั้น");
+        return;
+      }
       const reader = new FileReader();
-      reader.onloadend = () => { setPhotos(prev => [...prev, reader.result as string]); };
+      reader.onloadend = () => {
+        if (typeof reader.result === 'string') {
+          setPhotos(prev => [...prev, reader.result as string]);
+        }
+      };
+      reader.onerror = () => {
+        alert("เกิดข้อผิดพลาดในการโหลดรูปภาพ โปรดลองอีกครั้ง");
+      };
       reader.readAsDataURL(file);
     }
   };
@@ -247,8 +258,8 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
               </button>
             </div>
 
-            {/* Camera Area - ปรับเป็นสี่เหลี่ยมจัตุรัสเพื่อให้เห็นมุมกว้างขึ้น */}
-            <div className="relative w-full max-w-[420px] aspect-square bg-white rounded-[1.5rem] md:rounded-[2.5rem] p-2 md:p-4 shadow-2xl border border-gray-100 mb-6 flex items-center justify-center overflow-hidden">
+            {/* Camera Area - ปรับเป็นแนวตั้ง (3:4) เพื่อให้ "ยาวขึ้น" และรองรับหลายอุปกรณ์ */}
+            <div className="relative w-full max-w-[420px] aspect-[3/4] bg-white rounded-[1.5rem] md:rounded-[2.5rem] p-2 md:p-4 shadow-2xl border border-gray-100 mb-6 flex items-center justify-center overflow-hidden">
               <div className="relative w-full h-full rounded-[1rem] md:rounded-[1.8rem] overflow-hidden bg-black">
                 <div className="w-full h-full overflow-hidden relative">
                   <Webcam
@@ -257,11 +268,15 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
                     screenshotFormat="image/jpeg"
                     screenshotQuality={1}
                     mirrored={facingMode === 'user'}
+                    onUserMediaError={(err) => {
+                      console.error("Camera Error:", err);
+                      alert("ไม่สามารถเปิดกล้องได้: โปรดตรวจสอบการอนุญาตใช้งานกล้อง");
+                    }}
                     videoConstraints={{
-                      width: { min: 1280, ideal: 3840, max: 3840 },
-                      height: { min: 1280, ideal: 3840, max: 3840 },
                       facingMode: facingMode,
-                      aspectRatio: { ideal: 1 } // เปลี่ยนเป็น 1:1 เพื่อความกว้าง 
+                      aspectRatio: { ideal: 0.75 },
+                      width: { ideal: 1920 },
+                      height: { ideal: 1080 }
                     }}
                     style={{ transform: `scale(${zoom})`, transformOrigin: 'center center' }}
                     className={`absolute inset-0 w-full h-full object-cover transition-transform duration-100 ease-linear ${activeFilterClass}`}
