@@ -316,7 +316,7 @@ export default function PhotoEditor({ photos, onRetake, onRemovePhoto, filterId 
         <div className="w-full md:w-auto flex-shrink-0 flex justify-center bg-[#FFF0F5] md:bg-transparent p-4 md:p-0 z-20 shadow-sm md:shadow-none">
           <div
             ref={stripRef}
-            className="photo-strip-container relative p-4 md:p-6 shadow-2xl transition-all duration-300 ease-in-out flex flex-col items-center gap-4 overflow-hidden origin-top scale-[0.5] min-[380px]:scale-[0.6] sm:scale-[0.7] md:scale-90 lg:scale-100"
+            className="photo-strip-container relative p-4 md:p-6 shadow-2xl transition-all duration-300 ease-in-out flex flex-col items-center gap-4 overflow-hidden origin-top scale-[0.5] min-[380px]:scale-[0.6] sm:scale-[0.7] md:scale-85 lg:scale-95"
             style={{
               minWidth: '320px',
               maxWidth: '380px',
