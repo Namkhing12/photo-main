@@ -262,6 +262,7 @@ export default function PhotoEditor({ photos, onRetake, onRemovePhoto, filterId 
 
   // เปลี่ยนจาก Sticker เป็น Frame Overlay
   const [selectedFrameOverlay, setSelectedFrameOverlay] = useState<string | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
 
   // Custom Emoji State
   const [customEmojis, setCustomEmojis] = useState({
@@ -419,34 +420,37 @@ export default function PhotoEditor({ photos, onRetake, onRemovePhoto, filterId 
 
   const activeFilterClass = filters.find(f => f.id === selectedFilter)?.class || '';
 
-  // --- ฟังก์ชันดาวน์โหลด (Logic เดิมที่เสถียรแล้ว) ---
+  // --- ฟังก์ชันดาวน์โหลด (ปรับปรุงเพื่อรองรับมือถือ) ---
   const handleDownload = async () => {
-    if (stripRef.current) {
+    if (stripRef.current && !loading) {
       try {
-        await new Promise(resolve => setTimeout(resolve, 200)); // รอโหลดรูปกรอบ
+        setLoading(true);
+        // รอให้ UI และรูปภาพโหลดนิ่งก่อนเริ่มจัดการ
+        await new Promise(resolve => setTimeout(resolve, 500));
 
         const currentFilterClass = filters.find(f => f.id === selectedFilter)?.class || '';
         const cssFilter = convertTailwindToCssFilter(currentFilterClass);
         const processedImages = new Map<number, string>();
 
-        // Bake Filter ลงรูป
-        if (cssFilter !== 'none') {
-          const imageElements = stripRef.current.querySelectorAll('.photo-item');
-          await Promise.all(Array.from(imageElements).map(async (img: any, index) => {
-            const canvas = document.createElement('canvas');
-            canvas.width = img.naturalWidth || img.width;
-            canvas.height = img.naturalHeight || img.height;
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
+        // Bake Filter ลงรูป (ถ้าเบราว์เซอร์รองรับ)
+        const imageElements = stripRef.current.querySelectorAll('.photo-item');
+        await Promise.all(Array.from(imageElements).map(async (img: any, index) => {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth || img.width;
+          canvas.height = img.naturalHeight || img.height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            // เช็คว่าเบราว์เซอร์รองรับ filter บน canvas หรือไม่
+            if (cssFilter !== 'none' && 'filter' in ctx) {
               ctx.filter = cssFilter;
-              ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-              processedImages.set(index, canvas.toDataURL('image/png'));
             }
-          }));
-        }
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            processedImages.set(index, canvas.toDataURL('image/png'));
+          }
+        }));
 
         const canvas = await html2canvas(stripRef.current, {
-          scale: 4, // Maximize quality (Scale 4x)
+          scale: 2, // ปรับลดจาก 4 เหลือ 2 เพื่อประหยัด RAM บนมือถือ (ช่วยลดปัญหาเปิดรูปไม่ขึ้น)
           useCORS: true,
           allowTaint: true,
           backgroundColor: null,
@@ -467,18 +471,52 @@ export default function PhotoEditor({ photos, onRetake, onRemovePhoto, filterId 
           }
         });
 
-        const link = document.createElement('a');
-        link.download = `photo-booth-${Date.now()}.png`;
-        link.href = canvas.toDataURL('image/png'); // Lossless PNG
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        // แปลงเป็น Blob เพื่อความชัวร์บนมือถือ
+        canvas.toBlob(async (blob) => {
+          if (!blob) throw new Error('Canvas to Blob failed');
+
+          const fileName = `photocute-${Date.now()}.png`;
+          const file = new File([blob], fileName, { type: 'image/png' });
+
+          // ตรวจสอบว่ามือถือรองรับ Web Share API หรือไม่ (เช่น iOS Safari, Android Chrome)
+          if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+            try {
+              await navigator.share({
+                files: [file],
+                title: 'รูปถ่ายจาก PhotoCute',
+                text: 'บันทึกรูปนี้จากบูธถ่ายภาพของเรา!',
+              });
+            } catch (shareErr: any) {
+              if (shareErr.name !== 'AbortError') {
+                console.error("Share failed:", shareErr);
+                // ถ้าแชร์ล้มเหลว ให้ลองดาวน์โหลดแบบปกติสำรอง
+                fallbackDownload(blob, fileName);
+              }
+            }
+          } else {
+            // สำหรับ Desktop หรือเบราว์เซอร์ที่ไม่รองรับ Share API
+            fallbackDownload(blob, fileName);
+          }
+          setLoading(false);
+        }, 'image/png');
 
       } catch (err) {
         console.error("Save failed:", err);
         alert("เกิดข้อผิดพลาด: " + err);
+        setLoading(false);
       }
     }
+  };
+
+  const fallbackDownload = (blob: Blob, fileName: string) => {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 100);
   };
 
 
@@ -813,10 +851,15 @@ export default function PhotoEditor({ photos, onRetake, onRemovePhoto, filterId 
 
           {/* 4. Action Buttons */}
           <div className="flex gap-4">
-            <button onClick={handleDownload} className="flex-1 bg-[#FF5C8D] hover:bg-[#ff407b] text-white py-3.5 rounded-full font-bold shadow-lg flex justify-center items-center gap-2 transition-all active:scale-95">
-              <Download size={20} /> ดาวน์โหลด
+            <button
+              onClick={handleDownload}
+              disabled={loading}
+              className="flex-1 bg-[#FF5C8D] hover:bg-[#ff407b] text-white py-3.5 rounded-full font-bold shadow-lg flex justify-center items-center gap-2 transition-all active:scale-95 disabled:opacity-50"
+            >
+              {loading ? <RefreshCw className="animate-spin" size={20} /> : <Download size={20} />}
+              {loading ? 'กำลังประมวลผล...' : 'ดาวน์โหลด'}
             </button>
-            <button onClick={onRetake} className="flex-1 bg-white border-2 border-pink-200 text-pink-500 hover:bg-pink-50 py-3.5 rounded-full font-bold flex justify-center items-center gap-2 transition-all active:scale-95">
+            <button onClick={onRetake} disabled={loading} className="flex-1 bg-white border-2 border-pink-200 text-pink-500 hover:bg-pink-50 py-3.5 rounded-full font-bold flex justify-center items-center gap-2 transition-all active:scale-95 disabled:opacity-50">
               <RefreshCw size={20} /> ถ่ายใหม่
             </button>
           </div>
