@@ -7,12 +7,12 @@ export default function Home() {
   const router = useRouter();
 
   useEffect(() => {
-    router.push('/login');
+    router.push('/PhotoBooth');
   }, [router]);
 
   return (
     <div className="min-h-screen bg-pink-50 flex items-center justify-center">
-      <div className="text-pink-500 font-medium">กำลังไปหน้าเข้าสู่ระบบ...</div>
+      <div className="text-pink-500 font-medium">กำลังไปหน้าถ่ายรูป...</div>
     </div>
   );
 }

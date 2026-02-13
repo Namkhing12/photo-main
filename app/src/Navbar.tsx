@@ -33,14 +33,6 @@ export default function Navbar() {
                     PhotoCute
                 </span>
             </div>
-
-            <button
-                onClick={handleLogout}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl text-gray-600 hover:bg-pink-50 hover:text-pink-500 transition-all font-medium border border-transparent hover:border-pink-100 active:scale-95"
-            >
-                <LogOut size={18} />
-                <span>ออกจากระบบ</span>
-            </button>
         </nav>
     );
 }

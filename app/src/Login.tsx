@@ -32,7 +32,13 @@ export default function Login() {
             router.push('/PhotoBooth');
 
         } catch (error: any) {
-            alert(error.message || 'เกิดข้อผิดพลาดบางอย่าง');
+            console.error('Login Error Detailed:', error);
+            // ตรวจสอบว่าเป็นปัญหา Network หรือไม่
+            if (error.message === 'Failed to fetch') {
+                alert('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้: โปรดตรวจสอบอินเทอร์เน็ต หรือตรวจเช็คว่า Supabase URL ถูกต้อง (Failed to fetch)');
+            } else {
+                alert(error.message || 'เกิดข้อผิดพลาดในการเข้าสู่ระบบ');
+            }
         } finally {
             setLoading(false);
         }
