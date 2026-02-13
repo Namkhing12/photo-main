@@ -4,6 +4,10 @@ import React, { useState, useRef } from 'react';
 import { Download, RefreshCw, Ban, X, Type, Lock, Image as ImageIcon, Star, Sparkles } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { filters } from '../lib/constants';
+import emojisData from '../lib/emojis.json';
+
+// Type definition for emojilib data
+const emojis: Record<string, string[]> = emojisData;
 
 const frameColors = [
   { id: 'white', hex: '#ffffff', isPremium: false },
@@ -11,44 +15,79 @@ const frameColors = [
   { id: 'pink', hex: '#fbcfe8', isPremium: false },
   { id: 'blue', hex: '#bfdbfe', isPremium: false },
   { id: 'cream', hex: '#fef3c7', isPremium: false },
+  { id: 'Chinese New Year', hex: '#ff8c8aff', isPremium: false },
+  { id: 'Christmas', hex: '#23652bff', isPremium: false },
 
   //สีพรีเมียม 
-  { id: 'emerald', hex: '#a7f3d0', isPremium: true },
-  { id: 'teal', hex: '#99f6e4', isPremium: true },
-  { id: 'cyan', hex: '#a5f3fc', isPremium: true },
-  { id: 'blue-premium', hex: '#bfdbfe', isPremium: true },
-  { id: 'indigo', hex: '#c7d2fe', isPremium: true },
-  { id: 'violet', hex: '#ddd6fe', isPremium: true },
-  { id: 'purple', hex: '#e9d5ff', isPremium: true },
-  { id: 'fuchsia', hex: '#f5d0fe', isPremium: true },
-  { id: 'rose', hex: '#fecdd3', isPremium: true },
+  { id: 'emerald', hex: '#a7f3d0', isPremium: false },
+  { id: 'teal', hex: '#99f6e4', isPremium: false },
+  { id: 'cyan', hex: '#a5f3fc', isPremium: false },
+  { id: 'blue-premium', hex: '#bfdbfe', isPremium: false },
+  { id: 'indigo', hex: '#c7d2fe', isPremium: false },
+  { id: 'violet', hex: '#ddd6fe', isPremium: false },
+  { id: 'purple', hex: '#e9d5ff', isPremium: false },
+  { id: 'fuchsia', hex: '#f5d0fe', isPremium: false },
+  { id: 'rose', hex: '#fecdd3', isPremium: false },
 
 
-  { id: 'gradient-1', hex: 'linear-gradient(135deg, #fbcfe8 0%, #e9d5ff 100%)', isPremium: true },
-  { id: 'gradient-2', hex: 'linear-gradient(135deg, #fef08a 0%, #fed7aa 100%)', isPremium: true },
-  { id: 'gradient-3', hex: 'linear-gradient(135deg, #bfdbfe 0%, #a5f3fc 100%)', isPremium: true },
-  { id: 'gradient-sunset', hex: 'linear-gradient(135deg, #fed7aa 0%, #fecaca 50%, #fbcfe8 100%)', isPremium: true },
-  { id: 'gradient-ocean', hex: 'linear-gradient(135deg, #bbf7d0 0%, #93c5fd 100%)', isPremium: true },
-  { id: 'gradient-nature', hex: 'linear-gradient(135deg, #d9f99d 0%, #86efac 100%)', isPremium: true },
-  { id: 'gradient-dusk', hex: 'linear-gradient(135deg, #a5b4fc 0%, #c084fc 100%)', isPremium: true },
-  { id: 'gradient-sweet', hex: 'linear-gradient(135deg, #fce7f3 0%, #fbcfe8 50%, #fda4af 100%)', isPremium: true },
-
-  // --- ลวดลาย ---
-  { id: 'rainbow', hex: 'linear-gradient(90deg, #fecaca, #fef08a, #bfdbfe)', isPremium: true },
+  { id: 'gradient-1', hex: 'linear-gradient(135deg, #fbcfe8 0%, #e9d5ff 100%)', isPremium: false },
+  { id: 'gradient-2', hex: 'linear-gradient(135deg, #fef08a 0%, #fed7aa 100%)', isPremium: false },
+  { id: 'gradient-3', hex: 'linear-gradient(135deg, #bfdbfe 0%, #a5f3fc 100%)', isPremium: false },
+  { id: 'gradient-sunset', hex: 'linear-gradient(135deg, #fed7aa 0%, #fecaca 50%, #fbcfe8 100%)', isPremium: false },
+  { id: 'gradient-ocean', hex: 'linear-gradient(135deg, #bbf7d0 0%, #93c5fd 100%)', isPremium: false },
+  { id: 'gradient-nature', hex: 'linear-gradient(135deg, #d9f99d 0%, #86efac 100%)', isPremium: false },
+  { id: 'gradient-dusk', hex: 'linear-gradient(135deg, #a5b4fc 0%, #c084fc 100%)', isPremium: false },
+  { id: 'gradient-sweet', hex: 'linear-gradient(135deg, #fce7f3 0%, #fbcfe8 50%, #fda4af 100%)', isPremium: false },
+  { id: 'rainbow', hex: 'linear-gradient(90deg, #fecaca, #fef08a, #bfdbfe)', isPremium: false },
 ];
 
-// --- 2. ข้อมูลรูปกรอบ (Overlay Frames) ---
+const commonEmojisFallback = [
+  { category: 'Smileys & Emotion', icons: ['✨', '💖', '🌟', '🌈', '🎀', '🧸', '🌸'] },
+  { category: 'Animals & Nature', icons: ['🐱', '🐶', '🧸', '🐰', '🐼', '🐨', '🐣', '🐥'] },
+];
+
 const overlayFrames = [
-  { id: 'none', src: '', name: 'ไม่ใส่กรอบ' },
-  { id: 'cute', src: '🧸', name: '🧸 Cute' },
-  { id: 'sparkle', src: '✨', name: '✨ Sparkle' },
-  { id: 'nature', src: '🌿', name: '🌿 Nature' },
-  { id: 'cool', src: '😎', name: '😎 Cool' }
+  { id: 'none', src: '', name: 'ไม่ใส่กรอบ', type: 'emoji', isPremium: false },
+  { id: 'cute', src: '🧸', name: '🧸 Cute', type: 'emoji', isPremium: false },
+  { id: 'sparkle', src: '✨', name: '✨ Sparkle', type: 'emoji', isPremium: false },
+  { id: 'nature', src: '🌿', name: '🌿 Nature', type: 'emoji', isPremium: false },
+  { id: 'cool', src: '😎', name: '😎 Cool', type: 'emoji', isPremium: false },
+  { id: 'Chinese New Year', src: '🧧', name: '🧧 Chinese New Year', type: 'emoji', isPremium: false },
+  { id: 'Christmas', src: '🎄', name: '🎄 Christmas', type: 'emoji', isPremium: false },
+  { id: 'birthday', src: '🎂', name: '🎂 Birthday', type: 'emoji', isPremium: false },
+  { id: 'love', src: '❤️', name: '❤️ Love', type: 'emoji', isPremium: false },
+  { id: 'space', src: '🚀', name: '🚀 Galaxy', type: 'emoji', isPremium: false },
+  { id: 'cat', src: '🐱', name: '🐱 Meow', type: 'emoji', isPremium: false },
+  { id: 'custom', src: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-plus"><path d="M12 5v14M5 12h14"/></svg>', name: 'กำหนดเอง', type: 'custom', isPremium: false },
+
+  // Premium PNG Frames
+  // { id: 'heart-premium', src: '/frames/heart-frame.png', name: '💖 Premium Heart', type: 'image', isPremium: true },
+  // { id: 'stars-premium', src: '/frames/stars-frame.png', name: '⭐ Premium Stars', type: 'image', isPremium: true }
 ];
 
 // --- Helper: Render Frame Overlay as DOM Elements ---
-const renderOverlayFrame = (id: string | null) => {
+// --- Helper: Render Frame Overlay as DOM Elements ---
+const renderOverlayFrame = (
+  id: string | null,
+  customEmojis?: { topLeft: string, topRight: string, bottomLeft: string, bottomRight: string }
+) => {
   if (!id || id === 'none') return null;
+
+  const frame = overlayFrames.find(f => f.id === id);
+  if (!frame) return null;
+
+  if (frame.type === 'image') {
+    return (
+      <div className="absolute inset-0 z-20 pointer-events-none select-none">
+        <img
+          src={frame.src}
+          alt={frame.name}
+          className="w-full h-full object-fill opacity-90"
+          style={{ mixBlendMode: 'multiply' }} // Optional: adjust for how PNG frames should blend
+        />
+      </div>
+    );
+  }
 
   const styleBase = "absolute text-3xl md:text-4xl drop-shadow-md select-none z-20 pointer-events-none";
 
@@ -83,6 +122,69 @@ const renderOverlayFrame = (id: string | null) => {
       <div className={`${styleBase} bottom-2 left-2`}>🎸</div>
       <div className={`${styleBase} bottom-2 right-2`}>👾</div>
     </>
+  );
+
+  if (id === 'Chinese New Year') return (
+    <>
+      <div className={`${styleBase} top-2 left-2`}>🧧</div>
+      <div className={`${styleBase} top-2 right-2`}>🏮</div>
+      <div className={`${styleBase} bottom-2 left-2`}>🔴</div>
+      <div className={`${styleBase} bottom-2 right-2`}>🇨🇳</div>
+    </>
+  );
+  if (id === 'Christmas') return (
+    <>
+      <div className={`${styleBase} top-2 left-2`}>🎄</div>
+      <div className={`${styleBase} top-2 right-2`}>🎅</div>
+      <div className={`${styleBase} bottom-2 left-2`}>🎁</div>
+      <div className={`${styleBase} bottom-2 right-2`}>🦌</div>
+    </>
+  );
+
+
+  if (id === 'birthday') return (
+    <>
+      <div className={`${styleBase} top-2 left-2`}>🎂</div>
+      <div className={`${styleBase} top-2 right-2`}>🎈</div>
+      <div className={`${styleBase} bottom-2 left-2`}>🎉</div>
+      <div className={`${styleBase} bottom-2 right-2`}>🕯️</div>
+    </>
+  );
+
+  if (id === 'love') return (
+    <>
+      <div className={`${styleBase} top-2 left-2`}>❤️</div>
+      <div className={`${styleBase} top-2 right-2`}>💌</div>
+      <div className={`${styleBase} bottom-2 left-2`}>🌹</div>
+      <div className={`${styleBase} bottom-2 right-2`}>💋</div>
+    </>
+  );
+
+  if (id === 'space') return (
+    <>
+      <div className={`${styleBase} top-2 left-2`}>🚀</div>
+      <div className={`${styleBase} top-2 right-2`}>🪐</div>
+      <div className={`${styleBase} bottom-2 left-2`}>👽</div>
+      <div className={`${styleBase} bottom-2 right-2`}>🌠</div>
+    </>
+  );
+
+  if (id === 'cat') return (
+    <>
+      <div className={`${styleBase} top-2 left-2`}>🐱</div>
+      <div className={`${styleBase} top-2 right-2`}>🐾</div>
+      <div className={`${styleBase} bottom-2 left-2`}>🧶</div>
+      <div className={`${styleBase} bottom-2 right-2`}>🐟</div>
+    </>
+  );
+
+  if (id === 'custom') return (
+    <div className="absolute inset-0 pointer-events-none z-20">
+      <div className={`${styleBase} top-2 left-2`}>{customEmojis?.topLeft || '✨'}</div>
+      <div className={`${styleBase} top-2 right-2`}>{customEmojis?.topRight || '💖'}</div>
+      <div className={`${styleBase} bottom-2 left-2`}>{customEmojis?.bottomLeft || '🌟'}</div>
+      <div className={`${styleBase} bottom-2 right-2`}>{customEmojis?.bottomRight || '✨'}</div>
+    </div>
   );
   return null;
 };
@@ -155,16 +257,36 @@ interface PhotoEditorProps {
 
 export default function PhotoEditor({ photos, onRetake, onRemovePhoto, filterId = 'normal' }: PhotoEditorProps) {
   const [selectedColor, setSelectedColor] = useState(frameColors[0]);
+  const [customColor, setCustomColor] = useState('#ffffff');
+  const [isCustomActive, setIsCustomActive] = useState(false);
 
   // เปลี่ยนจาก Sticker เป็น Frame Overlay
   const [selectedFrameOverlay, setSelectedFrameOverlay] = useState<string | null>(null);
+
+  // Custom Emoji State
+  const [customEmojis, setCustomEmojis] = useState({
+    topLeft: '✨',
+    topRight: '💖',
+    bottomLeft: '🌟',
+    bottomRight: '✨'
+  });
+  const [activeEmojiCategory, setActiveEmojiCategory] = useState(0);
+  const [emojiSearch, setEmojiSearch] = useState('');
+
+  // Runtime Emoji Data
+  const [fetchedEmojis, setFetchedEmojis] = useState<Record<string, string[]>>(emojis);
+  const [isEmojiLoading, setIsEmojiLoading] = useState(true);
+  const [emojiFetchError, setEmojiFetchError] = useState<string | null>(null);
+  const [dynamicCategories, setDynamicCategories] = useState<{ category: string, icons: string[] }[]>(commonEmojisFallback);
+  const [activeCorner, setActiveCorner] = useState<'topLeft' | 'topRight' | 'bottomLeft' | 'bottomRight'>('topLeft');
+  const [fetchTrigger, setFetchTrigger] = useState(0); // For retry logic
 
   // Filter State
   const [selectedFilter, setSelectedFilter] = useState<string>(filterId);
   const [favoriteFilters, setFavoriteFilters] = useState<string[]>([]);
 
   const [footerTitle, setFooterTitle] = useState('Photo Booth');
-  const [footerSubtitle, setFooterSubtitle] = useState('2025 By PhotoCute');
+  const [footerSubtitle, setFooterSubtitle] = useState('2026 By PhotoCute');
 
   const stripRef = useRef<HTMLDivElement>(null);
 
@@ -178,7 +300,98 @@ export default function PhotoEditor({ photos, onRetake, onRemovePhoto, filterId 
         console.error('Failed to parse favoriteFilters', e);
       }
     }
-  }, []);
+
+    // Fetch Emojis from GitHub
+    const fetchEmojis = async () => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        controller.abort('timeout');
+      }, 10000); // 10s timeout
+
+      try {
+        setIsEmojiLoading(true);
+        setEmojiFetchError(null);
+
+        // 1. Fetch search library
+        const searchResp = await fetch('https://raw.githubusercontent.com/muan/emojilib/main/dist/emoji-en-US.json', {
+          signal: controller.signal
+        });
+        if (searchResp.ok) {
+          const data = await searchResp.json();
+          setFetchedEmojis(data);
+        }
+
+        // 2. Fetch categorized library (gemoji)
+        const catResp = await fetch('https://raw.githubusercontent.com/github/gemoji/master/db/emoji.json', {
+          signal: controller.signal
+        });
+        if (catResp.ok) {
+          const catData = await catResp.json();
+          // Group by category
+          const groups: Record<string, string[]> = {};
+          const heartIcons: string[] = [];
+
+          catData.forEach((item: any) => {
+            // Extract hearts for dedicated category
+            const isHeart = item.description?.toLowerCase().includes('heart') ||
+              item.category?.toLowerCase().includes('heart') ||
+              item.aliases?.some((a: string) => a.toLowerCase().includes('heart')) ||
+              item.tags?.some((t: string) => t.toLowerCase().includes('heart'));
+
+            if (isHeart) {
+              heartIcons.push(item.emoji);
+            }
+
+            if (!groups[item.category]) groups[item.category] = [];
+            groups[item.category].push(item.emoji);
+          });
+
+          let formatted = Object.entries(groups).map(([name, icons]) => ({
+            category: name,
+            icons: icons.slice(0, 48) // Limit icons per category for UI performance
+          }));
+
+          // Prepend Dedicated Heart Category
+          if (heartIcons.length > 0) {
+            // Remove duplicates and limit
+            const uniqueHearts = Array.from(new Set(heartIcons)).slice(0, 48);
+            formatted = [
+              { category: 'heart', icons: uniqueHearts },
+              ...formatted
+            ];
+          }
+
+          setDynamicCategories(formatted);
+        }
+      } catch (error: any) {
+        // Only log and show error if it's NOT a manual abort from unmount
+        if (error.name === 'AbortError') {
+          if (controller.signal.reason === 'timeout') {
+            console.warn('Emoji fetch timed out');
+            setEmojiFetchError('การเชื่อมต่อกับ GitHub ใช้เวลานานเกินไป (Timeout)');
+          }
+          // Silent for other aborts (unmount)
+        } else {
+          console.error('Failed to fetch emojis from Git:', error);
+          setEmojiFetchError('ไม่สามารถโหลดอิโมจิจาก GitHub ได้ กรุณาลองใหม่อีกครั้ง');
+        }
+      } finally {
+        clearTimeout(timeoutId);
+        setIsEmojiLoading(false);
+      }
+
+      // Cleanup function to abort if component unmounts or trigger changes
+      return () => {
+        controller.abort('unmount');
+        clearTimeout(timeoutId);
+      };
+    };
+
+    const cleanup = fetchEmojis();
+    return () => {
+      cleanup.then(abortFn => abortFn?.());
+    };
+  }, [fetchTrigger]);
 
   // Save Favorites to LocalStorage
   React.useEffect(() => {
@@ -272,7 +485,7 @@ export default function PhotoEditor({ photos, onRetake, onRemovePhoto, filterId 
   return (
     <div className="min-h-screen bg-[#FFF0F5] flex flex-col items-center py-8 font-sans">
 
-      <h1 className="text-xl md:text-2xl font-bold text-gray-800 mb-8 text-center px-4">
+      <h1 className="text-xl md:text-2xl font-bold text-pink-500 mb-8 text-center px-4">
         Photo Booth By PhotoCute
       </h1>
 
@@ -286,8 +499,8 @@ export default function PhotoEditor({ photos, onRetake, onRemovePhoto, filterId 
             style={{
               minWidth: '320px',
               maxWidth: '380px',
-              background: selectedColor.hex,
-              color: selectedColor.id === 'black' ? 'white' : '#333'
+              background: isCustomActive ? customColor : selectedColor.hex,
+              color: (isCustomActive && customColor === '#000000') || (!isCustomActive && selectedColor.id === 'black') ? 'white' : '#333'
             }}
           >
             {/* Grid รูปภาพ */}
@@ -314,7 +527,7 @@ export default function PhotoEditor({ photos, onRetake, onRemovePhoto, filterId 
             </div>
 
             {/* --- 🖼️ ส่วนแสดงกรอบรูป (Frame Overlay) --- */}
-            {renderOverlayFrame(selectedFrameOverlay)}
+            {renderOverlayFrame(selectedFrameOverlay, customEmojis)}
 
             {/* Footer Text */}
             <div
@@ -344,14 +557,40 @@ export default function PhotoEditor({ photos, onRetake, onRemovePhoto, filterId 
                       alert('🔒 กรอบนี้สำหรับสมาชิก Premium (Demo)');
                     }
 
+                    setIsCustomActive(false);
                     setSelectedColor(color);
                   }}
-                  className={`w-10 h-10 rounded-full shadow-sm transition-all flex-shrink-0 border-2 ${selectedColor.id === color.id ? (color.isPremium ? 'border-red-500' : 'border-pink-500') : 'border-gray-200'}`}
+                  className={`w-8 h-8 rounded-full border-2 transform transition-all duration-200 hover:scale-110 active:scale-95 shadow-sm ${(!isCustomActive && selectedColor.id === color.id) ? 'border-pink-500 scale-110' : 'border-white/50'}`}
                   style={{ background: color.hex }}
+                  title={color.id}
                 >
-                  {color.isPremium && <Lock size={12} className="text-white mx-auto" />}
+                  {color.isPremium && (
+                    <div className="absolute -top-1 -right-1 bg-white rounded-full p-0.5 shadow-sm">
+                      <Lock size={8} className="text-pink-500" />
+                    </div>
+                  )}
                 </button>
               ))}
+
+              {/* Custom Color Picker */}
+              <div className="relative group">
+                <input
+                  type="color"
+                  value={customColor}
+                  onChange={(e) => {
+                    setCustomColor(e.target.value);
+                    setIsCustomActive(true);
+                  }}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                />
+                <button
+                  className={`w-8 h-8 rounded-full border-2 flex items-center justify-center transform transition-all duration-200 hover:scale-110 active:scale-95 shadow-sm ${isCustomActive ? 'border-pink-500 scale-110' : 'border-white/50'}`}
+                  style={{ background: customColor }}
+                  title="เลือกสีเอง"
+                >
+                  <Sparkles size={14} className={isCustomActive ? 'text-pink-500' : 'text-gray-400'} />
+                </button>
+              </div>
             </div>
           </div>
 
@@ -366,7 +605,12 @@ export default function PhotoEditor({ photos, onRetake, onRemovePhoto, filterId 
               {overlayFrames.map((frame) => (
                 <button
                   key={frame.id}
-                  onClick={() => setSelectedFrameOverlay(frame.id)}
+                  onClick={() => {
+                    if (frame.isPremium) {
+                      alert('🔒 กรอบนี้สำหรับสมาชิก Premium (Demo)');
+                    }
+                    setSelectedFrameOverlay(frame.id);
+                  }}
                   className={`
                     aspect-square rounded-xl flex items-center justify-center overflow-hidden transition-all relative
                     ${selectedFrameOverlay === frame.id
@@ -374,8 +618,18 @@ export default function PhotoEditor({ photos, onRetake, onRemovePhoto, filterId 
                       : 'border border-gray-200 hover:bg-gray-50'}
                   `}
                 >
+                  {frame.isPremium && (
+                    <div className="absolute top-1 right-1 z-10 bg-pink-500 rounded-full p-0.5 shadow-sm">
+                      <Lock size={10} className="text-white" />
+                    </div>
+                  )}
+
                   {frame.id === 'none' ? (
                     <Ban size={24} className="text-gray-400" />
+                  ) : frame.type === 'image' ? (
+                    <img src={frame.src} alt={frame.name} className="w-full h-full object-cover" />
+                  ) : frame.src.startsWith('<svg') ? (
+                    <div className="text-pink-400 scale-125 transition-transform" dangerouslySetInnerHTML={{ __html: frame.src }} />
                   ) : (
                     <span className="text-2xl">{frame.src}</span>
                   )}
@@ -383,6 +637,141 @@ export default function PhotoEditor({ photos, onRetake, onRemovePhoto, filterId 
               ))}
             </div>
           </div>
+
+          {/* 2.5 Custom Emoji Editor (Visible only when 'custom' frame is selected) */}
+          {selectedFrameOverlay === 'custom' && (
+            <div className="mb-6 animate-in slide-in-from-top-2 duration-300">
+              <h3 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
+                <Star size={16} className="text-yellow-400" /> เลือกอิโมจิเอง
+              </h3>
+              <div className="grid grid-cols-2 gap-3 bg-pink-50/50 p-4 rounded-2xl border border-pink-100 mb-4">
+                <div className={`flex flex-col gap-1 p-2 rounded-xl transition-all cursor-pointer ${activeCorner === 'topLeft' ? 'bg-pink-100 ring-1 ring-pink-300' : 'hover:bg-pink-50'}`} onClick={() => setActiveCorner('topLeft')}>
+                  <span className="text-[10px] text-gray-400 font-bold uppercase ml-1">มุมซ้ายบน</span>
+                  <div className="w-full py-2 text-center text-xl bg-white rounded-lg border border-pink-50">{customEmojis.topLeft}</div>
+                </div>
+                <div className={`flex flex-col gap-1 p-2 rounded-xl transition-all cursor-pointer ${activeCorner === 'topRight' ? 'bg-pink-100 ring-1 ring-pink-300' : 'hover:bg-pink-50'}`} onClick={() => setActiveCorner('topRight')}>
+                  <span className="text-[10px] text-gray-400 font-bold uppercase ml-1 text-right">มุมขวาบน</span>
+                  <div className="w-full py-2 text-center text-xl bg-white rounded-lg border border-pink-50">{customEmojis.topRight}</div>
+                </div>
+                <div className={`flex flex-col gap-1 p-2 rounded-xl transition-all cursor-pointer ${activeCorner === 'bottomLeft' ? 'bg-pink-100 ring-1 ring-pink-300' : 'hover:bg-pink-50'}`} onClick={() => setActiveCorner('bottomLeft')}>
+                  <span className="text-[10px] text-gray-400 font-bold uppercase ml-1">มุมซ้ายล่าง</span>
+                  <div className="w-full py-2 text-center text-xl bg-white rounded-lg border border-pink-50">{customEmojis.bottomLeft}</div>
+                </div>
+                <div className={`flex flex-col gap-1 p-2 rounded-xl transition-all cursor-pointer ${activeCorner === 'bottomRight' ? 'bg-pink-100 ring-1 ring-pink-300' : 'hover:bg-pink-50'}`} onClick={() => setActiveCorner('bottomRight')}>
+                  <span className="text-[10px] text-gray-400 font-bold uppercase ml-1 text-right">มุมขวาล่าง</span>
+                  <div className="w-full py-2 text-center text-xl bg-white rounded-lg border border-pink-50">{customEmojis.bottomRight}</div>
+                </div>
+              </div>
+
+              {/* Emoji Picker */}
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-inner overflow-hidden">
+                {/* Search Bar */}
+                <div className="p-2 border-b border-gray-50 flex gap-2 items-center bg-gray-50/30">
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      placeholder="ค้นหาอิโมจิ"
+                      value={emojiSearch}
+                      onChange={(e) => setEmojiSearch(e.target.value)}
+                      className="w-full pl-8 pr-3 py-1.5 text-xs bg-white rounded-lg border border-pink-100 focus:border-pink-300 outline-none shadow-sm"
+                    />
+                    <Sparkles size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-pink-300" />
+                    {emojiSearch && (
+                      <button
+                        onClick={() => setEmojiSearch('')}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-pink-500"
+                      >
+                        <X size={12} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Categories - Only show when NOT searching */}
+                {!emojiSearch && (
+                  <div className="flex overflow-x-auto border-b border-gray-50 scrollbar-hide">
+                    {dynamicCategories.map((cat, idx) => (
+                      <button
+                        key={cat.category}
+                        onClick={() => setActiveEmojiCategory(idx)}
+                        className={`px-3 py-2 text-[10px] font-bold whitespace-nowrap transition-colors ${activeEmojiCategory === idx ? 'bg-pink-50 text-pink-500 border-b-2 border-pink-500' : 'text-gray-400 hover:bg-gray-50'}`}
+                      >
+                        {cat.category}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                <div className="p-3 grid grid-cols-4 gap-2 h-[160px] overflow-y-auto custom-scrollbar">
+                  {isEmojiLoading && !emojiSearch ? (
+                    <div className="col-span-4 h-full flex items-center justify-center flex-col gap-2 text-gray-400">
+                      <RefreshCw size={24} className="animate-spin text-pink-300" />
+                      <span className="text-[10px]">กำลังโหลดอิโมจิจาก GitHub...</span>
+                    </div>
+                  ) : emojiFetchError && !emojiSearch ? (
+                    <div className="col-span-4 h-full flex items-center justify-center flex-col gap-2 p-4 text-center">
+                      <Ban size={24} className="text-pink-300" />
+                      <span className="text-[10px] text-gray-500 leading-tight">{emojiFetchError}</span>
+                      <button
+                        onClick={() => setFetchTrigger(prev => prev + 1)}
+                        className="mt-1 px-3 py-1 bg-pink-500 text-white text-[10px] rounded-full font-bold hover:bg-pink-600 transition-colors"
+                      >
+                        ลองใหม่
+                      </button>
+                      <span className="text-[9px] text-gray-400 mt-1 italic">(กำลังใช้อิโมจิสำรองแบบออฟไลน์)</span>
+                    </div>
+                  ) : emojiSearch ? (
+                    // Search Results
+                    Object.entries(fetchedEmojis)
+                      .filter(([emoji, keywords]) =>
+                        keywords.some(k => k.toLowerCase().includes(emojiSearch.toLowerCase()))
+                      )
+                      .slice(0, 100) // Limit results for performance
+                      .map(([emoji], idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => {
+                            setCustomEmojis(prev => ({ ...prev, [activeCorner]: emoji }));
+                            // setEmojiSearch(''); // Optional: clear search after picking
+                          }}
+                          className="aspect-square flex items-center justify-center text-2xl hover:bg-pink-50 rounded-lg transition-all active:scale-90"
+                        >
+                          {emoji}
+                        </button>
+                      ))
+                  ) : (
+                    // Categorized Icons
+                    dynamicCategories[activeEmojiCategory]?.icons.map((emoji, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => setCustomEmojis(prev => ({ ...prev, [activeCorner]: emoji }))}
+                        className="aspect-square flex items-center justify-center text-2xl hover:bg-pink-50 rounded-lg transition-all active:scale-90"
+                      >
+                        {emoji}
+                      </button>
+                    ))
+                  )}
+
+                  {emojiSearch && Object.entries(fetchedEmojis).filter(([emoji, keywords]) =>
+                    keywords.some(k => k.toLowerCase().includes(emojiSearch.toLowerCase()))
+                  ).length === 0 && (
+                      <div className="col-span-4 py-8 text-center text-gray-400 text-xs flex flex-col items-center gap-2">
+                        <span>ไม่พบอิโมจิที่ค้นหา 😿</span>
+                        <button
+                          onClick={() => setEmojiSearch('')}
+                          className="text-pink-500 hover:underline"
+                        >
+                          ล้างการค้นหา
+                        </button>
+                      </div>
+                    )}
+                </div>
+                <div className="p-2 bg-gray-50 text-[10px] text-gray-400 text-center italic border-t border-gray-100">
+                  {emojiSearch ? `ผลการค้นหาสำหรับ "${emojiSearch}"` : 'คลิกที่มุมด้านบนแล้วเลือกอิโมจิที่ต้องการ ✨'}
+                </div>
+              </div>
+            </div>
+          )}
           {/* 3. Filters Slider */}
           <div className="mb-6">
             <h3 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">

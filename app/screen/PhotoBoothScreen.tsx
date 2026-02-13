@@ -183,8 +183,8 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
           <div className="flex-1 w-full flex flex-col items-center">
 
             <div className="md:hidden text-center mb-4">
-              <h1 className="text-xl font-bold text-gray-800 flex items-center gap-2 justify-center">
-                <Sparkles className="text-pink-500" size={18} /> Photo Booth
+              <h1 className="text-3xl font-bold text-pink-500 flex items-center gap-2 justify-center">
+                Photo Booth
               </h1>
             </div>
 
