@@ -2,29 +2,31 @@
 
 import React, { useState, FormEvent } from 'react';
 import { supabase } from '../../lib/supabaseClient';
-import { Mail, ArrowLeft, KeyRound, Loader2, ShieldCheck } from 'lucide-react';
+import { Phone, ArrowLeft, KeyRound, Loader2, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
 export default function ForgotPassword() {
     const router = useRouter();
-    const [email, setEmail] = useState<string>('');
+    const [phoneNumber, setPhoneNumber] = useState<string>('');
     const [otp, setOtp] = useState<string>('');
     const [loading, setLoading] = useState<boolean>(false);
-    const [step, setStep] = useState<1 | 2>(1); // Step 1: Email, Step 2: OTP
+    const [step, setStep] = useState<1 | 2>(1); // Step 1: Phone, Step 2: OTP
 
-    // ขั้นตอนที่ 1: ส่ง OTP ไปที่อีเมล
+    // ขั้นตอนที่ 1: ส่ง OTP ไปที่เบอร์โทรศัพท์
     const handleRequestOtp = async (e: FormEvent) => {
         e.preventDefault();
         setLoading(true);
 
         try {
-            const { error } = await supabase.auth.resetPasswordForEmail(email);
+            const { error } = await supabase.auth.signInWithOtp({
+                phone: phoneNumber,
+            });
             if (error) throw error;
 
             setStep(2); // ไปยังขั้นตอนกรอก OTP
         } catch (error: any) {
-            alert(error.message || 'เกิดข้อผิดพลาดในการส่งอีเมล');
+            alert(error.message || 'เกิดข้อผิดพลาดในการส่ง SMS');
         } finally {
             setLoading(false);
         }
@@ -37,9 +39,9 @@ export default function ForgotPassword() {
 
         try {
             const { error } = await supabase.auth.verifyOtp({
-                email: email,
+                phone: phoneNumber,
                 token: otp,
-                type: 'recovery',
+                type: 'sms',
             });
 
             if (error) throw error;
@@ -79,8 +81,8 @@ export default function ForgotPassword() {
                     </h2>
                     <p className="text-gray-400 text-sm px-6">
                         {step === 1
-                            ? 'กรอกอีเมลเพื่อรับรหัส OTP สำหรับตั้งรหัสผ่านใหม่'
-                            : `เราได้ส่งรหัส 6 หลักไปที่ ${email} แล้วค่ะ`
+                            ? 'กรอกเบอร์โทรศัพท์เพื่อรับรหัส OTP สำหรับตั้งรหัสผ่านใหม่'
+                            : `เราได้ส่งรหัส 6 หลักไปที่ ${phoneNumber} แล้วค่ะ`
                         }
                     </p>
                 </div>
@@ -89,24 +91,27 @@ export default function ForgotPassword() {
                 {step === 1 && (
                     <form onSubmit={handleRequestOtp} className="space-y-6">
                         <div className="relative">
-                            <Mail className="absolute left-3 top-3.5 h-5 w-5 text-pink-300" />
+                            <Phone className="absolute left-3 top-3.5 h-5 w-5 text-pink-300" />
                             <input
-                                type="email"
-                                placeholder="กรอกอีเมลของคุณ"
+                                type="tel"
+                                placeholder="เบอร์โทรศัพท์ (เช่น +66812345678)"
                                 required
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
+                                value={phoneNumber}
+                                onChange={(e) => setPhoneNumber(e.target.value)}
                                 className="w-full pl-10 pr-4 py-3 bg-pink-50 border border-pink-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-300 text-gray-700 placeholder-pink-300 transition-all"
                             />
                         </div>
+                        <p className="text-[10px] text-gray-400 px-2 mt-[-10px]">
+                            * กรุณาใส่รหัสประเทศด้วยนะคะ เช่น +66 นำหน้าเบอร์โทร
+                        </p>
 
                         <button
                             type="submit"
                             disabled={loading}
                             className="w-full bg-pink-400 hover:bg-pink-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-pink-200 transition-all transform active:scale-95 disabled:opacity-50 flex justify-center items-center"
                         >
-                            {loading ? <Loader2 className="animate-spin mr-2" /> : <Mail size={20} className="mr-2" />}
-                            {loading ? 'กำลังส่ง...' : 'ส่งรหัส OTP'}
+                            {loading ? <Loader2 className="animate-spin mr-2" /> : <Phone size={20} className="mr-2" />}
+                            {loading ? 'กำลังส่ง...' : 'ส่งรหัส OTP ทาง SMS'}
                         </button>
                     </form>
                 )}
@@ -141,7 +146,7 @@ export default function ForgotPassword() {
                             onClick={() => setStep(1)}
                             className="w-full text-sm text-pink-400 hover:text-pink-600 transition-colors"
                         >
-                            ส่งรหัสใหม่อีกครั้ง
+                            ลองใช้เบอร์อื่น
                         </button>
                     </form>
                 )}
