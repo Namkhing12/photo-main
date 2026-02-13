@@ -54,7 +54,7 @@ const overlayFrames = [
   { id: 'love', src: '❤️', name: '❤️ Love', type: 'emoji', isPremium: false },
   { id: 'space', src: '🚀', name: '🚀 Galaxy', type: 'emoji', isPremium: false },
   { id: 'cat', src: '🐱', name: '🐱 Meow', type: 'emoji', isPremium: false },
-  { id: 'custom', src: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-plus"><path d="M12 5v14M5 12h14"/></svg>', name: 'กำหนดเอง', type: 'custom', isPremium: false },
+  { id: 'unicorn', src: '🦄', name: '🦄 Uni', type: 'emoji', isPremium: true }
 ];
 
 const renderOverlayFrame = (
@@ -94,6 +94,7 @@ const renderOverlayFrame = (
   if (id === 'love') return renderEmojis('❤️', '💌', '🌹', '💋');
   if (id === 'space') return renderEmojis('🚀', '🪐', '👽', '🌠');
   if (id === 'cat') return renderEmojis('🐱', '🐾', '🧶', '🐟');
+  if (id === 'unicorn') return renderEmojis('🦄', '✨', '🌈', '💖');
   if (id === 'custom') return renderEmojis(customEmojis?.topLeft || '✨', customEmojis?.topRight || '💖', customEmojis?.bottomLeft || '🌟', customEmojis?.bottomRight || '✨');
   return null;
 };
@@ -225,6 +226,14 @@ export default function PhotoEditor({ photos, onRetake, onRemovePhoto, filterId 
         const processedImages = new Map<number, string>();
         const imageElements = stripRef.current.querySelectorAll('.photo-item');
         await Promise.all(Array.from(imageElements).map(async (img: any, index) => {
+          // ประกันว่ารูปโหลดเสร็จ 100% ก่อนประมวลผล
+          if (!img.complete) {
+            await new Promise((res) => {
+              img.onload = res;
+              img.onerror = res;
+            });
+          }
+
           const canvas = document.createElement('canvas');
           canvas.width = img.naturalWidth || img.width;
           canvas.height = img.naturalHeight || img.height;
@@ -244,15 +253,22 @@ export default function PhotoEditor({ photos, onRetake, onRemovePhoto, filterId 
           logging: false,
           onclone: (clonedDoc) => {
             const container = clonedDoc.querySelector('.photo-strip-container') as HTMLElement;
-            if (container) container.style.transform = 'none';
-            if (processedImages.size > 0) {
-              const clonedImages = clonedDoc.querySelectorAll('.photo-item');
-              clonedImages.forEach((img: any, index) => {
-                if (processedImages.has(index)) {
-                  img.src = processedImages.get(index)!;
-                  img.style.filter = 'none';
-                }
-              });
+            if (container) {
+              // ลบ transform เพื่อให้ html2canvas จับภาพได้ตรงตำแหน่ง (สำคัญมากในมือถือ)
+              container.style.transform = 'none';
+              container.style.display = 'flex'; // มั่นใจว่ามองเห็น
+
+              if (processedImages.size > 0) {
+                // เจาะจงหาเฉพาะรูปที่อยู่ใน container นี้เท่านั้น
+                const clonedImages = container.querySelectorAll('.photo-item');
+                clonedImages.forEach((img: any, index) => {
+                  if (processedImages.has(index)) {
+                    img.src = processedImages.get(index)!;
+                    img.style.filter = 'none';
+                    img.style.WebkitFilter = 'none';
+                  }
+                });
+              }
             }
           }
         });
