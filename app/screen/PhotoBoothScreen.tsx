@@ -51,13 +51,11 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
   const [showTimerMenu, setShowTimerMenu] = useState(false);
 
   // Zoom State (Digital Zoom)
-  const [zoom, setZoom] = useState(1);
-  const minZoom = 1;
+  const [zoom, setZoom] = useState(0.8);
+  const minZoom = 0.7;
   const maxZoom = 3;
 
   const cropImage = async (imageSrc: string, zoomLevel: number): Promise<string> => {
-    if (zoomLevel <= 1) return imageSrc;
-
     return new Promise((resolve) => {
       const img = new Image();
       img.onload = () => {
@@ -67,19 +65,32 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
 
         const w = img.width;
         const h = img.height;
-
-        const cropW = w / zoomLevel;
-        const cropH = h / zoomLevel;
-        const cropX = (w - cropW) / 2;
-        const cropY = (h - cropH) / 2;
-
         canvas.width = w;
         canvas.height = h;
 
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
 
-        ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, w, h);
+        // เคลียร์พื้นหลังเป็นดำ (สำหรับกรณี zoom < 1 ที่มีขอบ)
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(0, 0, w, h);
+
+        if (zoomLevel >= 1) {
+          // ซูมเข้า: ตัดเอาส่วนกลางมาขยาย
+          const cropW = w / zoomLevel;
+          const cropH = h / zoomLevel;
+          const cropX = (w - cropW) / 2;
+          const cropY = (h - cropH) / 2;
+          ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, w, h);
+        } else {
+          // ซูมออก: วางรูปให้เล็กลงตรงกลาง (จำลอง Wide Angle)
+          const drawW = w * zoomLevel;
+          const drawH = h * zoomLevel;
+          const drawX = (w - drawW) / 2;
+          const drawY = (h - drawH) / 2;
+          ctx.drawImage(img, 0, 0, w, h, drawX, drawY, drawW, drawH);
+        }
+
         resolve(canvas.toDataURL('image/jpeg', 1.0));
       };
       img.src = imageSrc;
