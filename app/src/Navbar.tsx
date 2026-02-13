@@ -1,23 +1,8 @@
 'use client';
 
 import React from 'react';
-import { supabase } from '../../lib/supabaseClient';
-import { LogOut, Sparkles } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 
 export default function Navbar() {
-    const router = useRouter();
-
-    const handleLogout = async () => {
-        try {
-            const { error } = await supabase.auth.signOut();
-            if (error) throw error;
-            router.push('/login');
-        } catch (error: any) {
-            console.error('Logout error:', error.message);
-            alert('เกิดข้อผิดพลาดในการออกจากระบบ');
-        }
-    };
 
     return (
         <nav className="w-full bg-white/80 backdrop-blur-md border-b border-pink-100 px-6 py-3 flex justify-between items-center sticky top-0 z-50">

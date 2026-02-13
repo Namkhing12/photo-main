@@ -54,6 +54,8 @@ const overlayFrames = [
   { id: 'love', src: '❤️', name: '❤️ Love', type: 'emoji', isPremium: false },
   { id: 'space', src: '🚀', name: '🚀 Galaxy', type: 'emoji', isPremium: false },
   { id: 'cat', src: '🐱', name: '🐱 Meow', type: 'emoji', isPremium: false },
+  { id: 'heart-frame', src: '/frames/heart-frame.png', name: '❤️ Heart PNG', type: 'image', isPremium: true },
+  { id: 'stars-frame', src: '/frames/stars-frame.png', name: '✨ Stars PNG', type: 'image', isPremium: true },
   { id: 'unicorn', src: '🦄', name: '🦄 Uni', type: 'emoji', isPremium: true }
 ];
 
@@ -321,15 +323,23 @@ export default function PhotoEditor({ photos, onRetake, onRemovePhoto, filterId 
               color: (isCustomActive && customColor === '#000000') || (!isCustomActive && selectedColor.id === 'black') ? 'white' : '#333'
             }}
           >
-            <div className={`grid gap-3 w-full relative z-10 ${photos.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
+            <div className={`grid gap-3 w-full relative z-10 ${photos.length <= 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
               {photos.map((img, idx) => (
-                <div key={idx} className="relative aspect-[3/4] overflow-hidden group bg-white">
+                <div key={idx} className="relative aspect-[3/4] overflow-hidden group bg-white rounded-sm shadow-sm border border-gray-100/50">
                   <img
                     src={img}
                     alt={`snap-${idx}`}
                     className={`photo-item w-full h-full object-cover ${activeFilterClass}`}
                     style={{ transform: 'translateZ(0)', filter: convertTailwindToCssFilter(activeFilterClass) }}
                   />
+                  {/* Remove Button - Hidden during html2canvas but visible to user */}
+                  <button
+                    onClick={() => onRemovePhoto(idx)}
+                    className="absolute top-1 right-1 bg-black/50 hover:bg-red-500 text-white p-1.5 rounded-full transition-all opacity-0 group-hover:opacity-100 z-40"
+                    data-html2canvas-ignore="true"
+                  >
+                    <X size={14} strokeWidth={3} />
+                  </button>
                 </div>
               ))}
             </div>
@@ -391,9 +401,21 @@ export default function PhotoEditor({ photos, onRetake, onRemovePhoto, filterId 
                       <button
                         key={frame.id}
                         onClick={() => setSelectedFrameOverlay(frame.id)}
-                        className={`aspect-square rounded-xl flex items-center justify-center transition-all ${selectedFrameOverlay === frame.id ? 'bg-pink-100 border-2 border-pink-400' : 'bg-gray-50 border border-gray-100'}`}
+                        className={`aspect-square rounded-xl flex items-center justify-center transition-all relative ${selectedFrameOverlay === frame.id ? 'bg-pink-100 border-2 border-pink-400' : 'bg-gray-50 border border-gray-100'}`}
                       >
-                        {frame.id === 'none' ? <Ban className="text-gray-300" /> : <span className="text-xl">{frame.src.startsWith('<svg') ? '+' : frame.src}</span>}
+                        {frame.id === 'none' ? <Ban className="text-gray-300" /> : (
+                          <div className="relative">
+                            <span className="text-xl">
+                              {frame.type === 'image' ? <ImageIcon size={20} className="text-pink-400" /> : frame.src}
+                            </span>
+                            {frame.isPremium && (
+                              <div className="absolute -top-3 -right-3 bg-white p-0.5 rounded-full shadow-sm">
+                                <Lock size={8} className="text-yellow-500" fill="currentColor" />
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {frame.type === 'image' && <span className="absolute bottom-1 left-0 right-0 text-[8px] font-bold text-center opacity-60">PNG</span>}
                       </button>
                     ))}
                   </div>
@@ -412,8 +434,15 @@ export default function PhotoEditor({ photos, onRetake, onRemovePhoto, filterId 
                   ))}
                 </div>
                 <div className="bg-gray-50 rounded-2xl border border-gray-100 overflow-hidden">
-                  <div className="p-3 border-b flex gap-2">
+                  <div className="p-3 border-b flex gap-2 items-center bg-white/50">
                     <input type="text" placeholder="ค้นหา..." value={emojiSearch} onChange={e => setEmojiSearch(e.target.value)} className="flex-1 px-3 py-2 text-sm rounded-xl border border-pink-100 outline-none focus:ring-2 focus:ring-pink-200" />
+                    <button
+                      onClick={() => setCustomEmojis({ topLeft: '✨', topRight: '💖', bottomLeft: '🌟', bottomRight: '✨' })}
+                      className="p-2 text-gray-400 hover:text-pink-500 hover:bg-pink-50 rounded-lg transition-colors"
+                      title="ล้างทั้งหมด"
+                    >
+                      <RefreshCw size={16} />
+                    </button>
                   </div>
                   <div className="p-3 grid grid-cols-6 gap-2 h-48 overflow-y-auto">
                     {isEmojiLoading ? <div className="col-span-6 text-center text-gray-400 text-xs py-10">กำลังโหลด...</div> : (
@@ -424,9 +453,9 @@ export default function PhotoEditor({ photos, onRetake, onRemovePhoto, filterId 
                     )}
                   </div>
                   {!emojiSearch && (
-                    <div className="flex overflow-x-auto p-2 bg-white border-t border-gray-100">
+                    <div className="flex overflow-x-auto p-2 bg-white border-t border-gray-100 no-scrollbar">
                       {dynamicCategories.map((cat, i) => (
-                        <button key={cat.category} onClick={() => setActiveEmojiCategory(i)} className={`px-3 py-1.5 rounded-full text-[10px] whitespace-nowrap mr-2 font-bold ${activeEmojiCategory === i ? 'bg-pink-500 text-white' : 'text-gray-400 hover:bg-gray-50'}`}>{cat.category}</button>
+                        <button key={cat.category} onClick={() => setActiveEmojiCategory(i)} className={`px-3 py-1.5 rounded-full text-[10px] whitespace-nowrap mr-2 font-bold transition-colors ${activeEmojiCategory === i ? 'bg-pink-500 text-white' : 'text-gray-400 hover:bg-gray-50'}`}>{cat.category}</button>
                       ))}
                     </div>
                   )}
