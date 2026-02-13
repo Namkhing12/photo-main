@@ -2,31 +2,52 @@
 
 import React, { useState, FormEvent } from 'react';
 import { supabase } from '../../lib/supabaseClient';
-import { Mail, ArrowLeft, KeyRound, Loader2 } from 'lucide-react';
+import { Mail, ArrowLeft, KeyRound, Loader2, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 export default function ForgotPassword() {
+    const router = useRouter();
     const [email, setEmail] = useState<string>('');
+    const [otp, setOtp] = useState<string>('');
     const [loading, setLoading] = useState<boolean>(false);
-    const [submitted, setSubmitted] = useState<boolean>(false);
+    const [step, setStep] = useState<1 | 2>(1); // Step 1: Email, Step 2: OTP
 
-    const handleResetPassword = async (e: FormEvent) => {
+    // ขั้นตอนที่ 1: ส่ง OTP ไปที่อีเมล
+    const handleRequestOtp = async (e: FormEvent) => {
         e.preventDefault();
         setLoading(true);
 
         try {
-            // ส่งคำขอรีเซ็ตรหัสผ่านไปที่ Supabase
-            const { error } = await supabase.auth.resetPasswordForEmail(email, {
-                // ใช้ window.location.origin เพื่อให้ redirect กลับมาที่ domain ปัจจุบัน (เช่น localhost:3000)
-                redirectTo: `${window.location.origin}/update-password`,
+            const { error } = await supabase.auth.resetPasswordForEmail(email);
+            if (error) throw error;
+
+            setStep(2); // ไปยังขั้นตอนกรอก OTP
+        } catch (error: any) {
+            alert(error.message || 'เกิดข้อผิดพลาดในการส่งอีเมล');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // ขั้นตอนที่ 2: ตรวจสอบ OTP
+    const handleVerifyOtp = async (e: FormEvent) => {
+        e.preventDefault();
+        setLoading(true);
+
+        try {
+            const { error } = await supabase.auth.verifyOtp({
+                email: email,
+                token: otp,
+                type: 'recovery',
             });
 
             if (error) throw error;
 
-            setSubmitted(true); // เปลี่ยนสถานะเป็นส่งสำเร็จ
-
+            // ตรวจสอบสำเร็จ พาไปหน้าตั้งรหัสผ่านใหม่
+            router.push('/update-password');
         } catch (error: any) {
-            alert(error.message || 'เกิดข้อผิดพลาดในการส่งอีเมล');
+            alert(error.message || 'รหัส OTP ไม่ถูกต้องหรือหมดอายุ');
         } finally {
             setLoading(false);
         }
@@ -36,10 +57,13 @@ export default function ForgotPassword() {
         <div className="min-h-screen flex items-center justify-center bg-pink-50 font-sans">
             <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-hidden p-8 border border-pink-100 relative">
 
-                {/* ปุ่มย้อนกลับ (Back Button) */}
-                <Link href="/login" className="absolute top-6 left-6 text-gray-400 hover:text-pink-500 transition-colors">
+                {/* ปุ่มย้อนกลับ */}
+                <button
+                    onClick={() => step === 2 ? setStep(1) : router.push('/login')}
+                    className="absolute top-6 left-6 text-gray-400 hover:text-pink-500 transition-colors"
+                >
                     <ArrowLeft size={24} />
-                </Link>
+                </button>
 
                 {/* --- Header --- */}
                 <div className="text-center mb-8 mt-4">
@@ -50,17 +74,20 @@ export default function ForgotPassword() {
                             className="w-32 h-32 object-contain"
                         />
                     </div>
-                    <h2 className="text-2xl font-bold text-pink-500 mb-2">ลืมรหัสผ่าน?</h2>
+                    <h2 className="text-2xl font-bold text-pink-500 mb-2">
+                        {step === 1 ? 'ลืมรหัสผ่าน?' : 'ยืนยันรหัส OTP'}
+                    </h2>
                     <p className="text-gray-400 text-sm px-6">
-                        กรอกอีเมลของคุณ เพื่อส่งลิงก์ตั้งรหัสผ่านใหม่
+                        {step === 1
+                            ? 'กรอกอีเมลเพื่อรับรหัส OTP สำหรับตั้งรหัสผ่านใหม่'
+                            : `เราได้ส่งรหัส 6 หลักไปที่ ${email} แล้วค่ะ`
+                        }
                     </p>
                 </div>
 
-                {/* --- Content (สลับหน้าระหว่าง ฟอร์ม กับ ข้อความส่งสำเร็จ) --- */}
-                {!submitted ? (
-                    <form onSubmit={handleResetPassword} className="space-y-6">
-
-                        {/* Email Input */}
+                {/* --- Step 1: Request OTP --- */}
+                {step === 1 && (
+                    <form onSubmit={handleRequestOtp} className="space-y-6">
                         <div className="relative">
                             <Mail className="absolute left-3 top-3.5 h-5 w-5 text-pink-300" />
                             <input
@@ -73,42 +100,58 @@ export default function ForgotPassword() {
                             />
                         </div>
 
-                        {/* Submit Button */}
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className="w-full bg-pink-400 hover:bg-pink-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-pink-200 transition-all transform active:scale-95 disabled:opacity-50 flex justify-center items-center"
+                        >
+                            {loading ? <Loader2 className="animate-spin mr-2" /> : <Mail size={20} className="mr-2" />}
+                            {loading ? 'กำลังส่ง...' : 'ส่งรหัส OTP'}
+                        </button>
+                    </form>
+                )}
+
+                {/* --- Step 2: Verify OTP --- */}
+                {step === 2 && (
+                    <form onSubmit={handleVerifyOtp} className="space-y-6">
+                        <div className="relative">
+                            <ShieldCheck className="absolute left-3 top-3.5 h-5 w-5 text-pink-300" />
+                            <input
+                                type="text"
+                                placeholder="กรอกรหัส OTP 6 หลัก"
+                                required
+                                maxLength={6}
+                                value={otp}
+                                onChange={(e) => setOtp(e.target.value)}
+                                className="w-full pl-10 pr-4 py-3 bg-pink-50 border border-pink-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-300 text-center text-2xl font-bold tracking-widest text-gray-700 placeholder-pink-200 transition-all"
+                            />
+                        </div>
+
                         <button
                             type="submit"
                             disabled={loading}
                             className="w-full bg-pink-400 hover:bg-pink-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-pink-200 transition-all transform active:scale-95 disabled:opacity-50 flex justify-center items-center"
                         >
                             {loading ? <Loader2 className="animate-spin mr-2" /> : <KeyRound size={20} className="mr-2" />}
-                            {loading ? 'กำลังส่ง...' : 'ส่งลิงก์รีเซ็ตรหัสผ่าน'}
+                            {loading ? 'กำลังยืนยัน...' : 'ยืนยันรหัส OTP'}
                         </button>
 
-                    </form>
-                ) : (
-                    /* --- Success State (แสดงเมื่อส่งอีเมลแล้ว) --- */
-                    <div className="text-center animate-fade-in">
-                        <div className="bg-green-100 text-green-500 p-4 rounded-xl mb-6 border border-green-200">
-                            <p className="font-bold">ส่งอีเมลเรียบร้อยแล้ว</p>
-                            <p className="text-xs mt-1 text-green-600">กรุณาตรวจสอบกล่องจดหมาย หรือ จดหมายขยะ เพื่อตั้งรหัสผ่านใหม่</p>
-                        </div>
-
-                        <Link
-                            href="/login"
-                            className="inline-block w-full bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-3 rounded-xl transition-all"
+                        <button
+                            type="button"
+                            onClick={() => setStep(1)}
+                            className="w-full text-sm text-pink-400 hover:text-pink-600 transition-colors"
                         >
-                            กลับไปหน้าเข้าสู่ระบบ
-                        </Link>
-                    </div>
+                            ส่งรหัสใหม่อีกครั้ง
+                        </button>
+                    </form>
                 )}
 
                 {/* --- Footer --- */}
-                {!submitted && (
-                    <div className="mt-8 text-center">
-                        <Link href="/login" className="text-sm text-gray-400 hover:text-pink-500 flex items-center justify-center gap-1 transition-colors">
-                            กลับไปหน้าเข้าสู่ระบบ
-                        </Link>
-                    </div>
-                )}
+                <div className="mt-8 text-center border-t border-gray-50 pt-6">
+                    <Link href="/login" className="text-sm text-gray-400 hover:text-pink-500 flex items-center justify-center gap-1 transition-colors">
+                        กลับไปหน้าเข้าสู่ระบบ
+                    </Link>
+                </div>
 
             </div>
         </div>
