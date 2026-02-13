@@ -258,9 +258,9 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
               </button>
             </div>
 
-            {/* Camera Area - ปรับเป็นแนวตั้งสูงสุด (9:16) เพื่อให้เห็นตัวเยอะขึ้นและดูไกลขึ้น */}
-            <div className="relative w-full max-w-[420px] aspect-[9/16] bg-white rounded-[1.5rem] md:rounded-[2.5rem] p-2 md:p-4 shadow-2xl border border-gray-100 mb-6 flex items-center justify-center overflow-hidden">
-              <div className="relative w-full h-full rounded-[1rem] md:rounded-[1.8rem] overflow-hidden bg-black">
+            {/* Camera Area - ปรับสัดส่วนเป็น 3:4 (มาตรฐาน) เพื่อมุมมองที่กว้างขึ้นและสวยงามในมือถือ */}
+            <div className="relative w-full max-w-[420px] aspect-[3/4] bg-white rounded-[1.5rem] md:rounded-[2.5rem] p-2 md:p-4 shadow-2xl border border-gray-100 mb-6 flex items-center justify-center overflow-hidden">
+              <div className="relative w-full h-full rounded-[1rem] md:rounded-[1.8rem] overflow-hidden bg-black shadow-inner border border-gray-200/50">
                 <div className="w-full h-full overflow-hidden relative">
                   <Webcam
                     audio={false}
@@ -274,9 +274,9 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
                     }}
                     videoConstraints={{
                       facingMode: facingMode,
-                      aspectRatio: { ideal: 0.5625 }, // ปรับให้ยาวสูงสุดเป็น 9:16
+                      aspectRatio: { ideal: 0.75 }, // กลับมาเป็น 3:4 มาตรฐาน
                       width: { ideal: 1080 },
-                      height: { ideal: 1920 }
+                      height: { ideal: 1440 }
                     }}
                     style={{ transform: `scale(${zoom})`, transformOrigin: 'center center' }}
                     className={`absolute inset-0 w-full h-full object-cover transition-transform duration-100 ease-linear ${activeFilterClass}`}
