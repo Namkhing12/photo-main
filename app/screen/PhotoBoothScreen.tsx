@@ -258,8 +258,8 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
               </button>
             </div>
 
-            {/* Camera Area - ปรับเป็นแนวตั้ง (3:4) เพื่อให้ "ยาวขึ้น" และรองรับหลายอุปกรณ์ */}
-            <div className="relative w-full max-w-[420px] aspect-[3/4] bg-white rounded-[1.5rem] md:rounded-[2.5rem] p-2 md:p-4 shadow-2xl border border-gray-100 mb-6 flex items-center justify-center overflow-hidden">
+            {/* Camera Area - ปรับเป็นแนวตั้งพิเศษ (2:3) เพื่อให้ "ยาวขึ้น" ตามคำขอ */}
+            <div className="relative w-full max-w-[420px] aspect-[2/3] bg-white rounded-[1.5rem] md:rounded-[2.5rem] p-2 md:p-4 shadow-2xl border border-gray-100 mb-6 flex items-center justify-center overflow-hidden">
               <div className="relative w-full h-full rounded-[1rem] md:rounded-[1.8rem] overflow-hidden bg-black">
                 <div className="w-full h-full overflow-hidden relative">
                   <Webcam
@@ -274,9 +274,9 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
                     }}
                     videoConstraints={{
                       facingMode: facingMode,
-                      aspectRatio: { ideal: 0.75 },
-                      width: { ideal: 1920 },
-                      height: { ideal: 1080 }
+                      aspectRatio: { ideal: 0.66 }, // ปรับให้ยาวขึ้นเป็น 2:3
+                      width: { ideal: 1080 },
+                      height: { ideal: 1620 }
                     }}
                     style={{ transform: `scale(${zoom})`, transformOrigin: 'center center' }}
                     className={`absolute inset-0 w-full h-full object-cover transition-transform duration-100 ease-linear ${activeFilterClass}`}
