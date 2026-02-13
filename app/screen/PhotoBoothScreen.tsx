@@ -258,8 +258,8 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
               </button>
             </div>
 
-            {/* Camera Area - ปรับสัดส่วนเป็น 3:4 (มาตรฐาน) เพื่อมุมมองที่กว้างขึ้นและสวยงามในมือถือ */}
-            <div className="relative w-full max-w-[420px] aspect-[3/4] bg-white rounded-[1.5rem] md:rounded-[2.5rem] p-2 md:p-4 shadow-2xl border border-gray-100 mb-6 flex items-center justify-center overflow-hidden">
+            {/* Camera Area - PC: Larger, Mobile: Viewport-fitting */}
+            <div className="relative w-full max-w-[420px] md:max-w-xl aspect-[3/4] bg-white rounded-[1.5rem] md:rounded-[2.5rem] p-2 md:p-6 shadow-2xl border border-gray-100 mb-4 sm:mb-6 flex items-center justify-center overflow-hidden">
               <div className="relative w-full h-full rounded-[1rem] md:rounded-[1.8rem] overflow-hidden bg-black shadow-inner border border-gray-200/50">
                 <div className="w-full h-full overflow-hidden relative">
                   <Webcam

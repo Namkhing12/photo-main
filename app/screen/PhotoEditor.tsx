@@ -54,6 +54,7 @@ const overlayFrames = [
   { id: 'love', src: '❤️', name: '❤️ Love', type: 'emoji', isPremium: false },
   { id: 'space', src: '🚀', name: '🚀 Galaxy', type: 'emoji', isPremium: false },
   { id: 'cat', src: '🐱', name: '🐱 Meow', type: 'emoji', isPremium: false },
+  { id: 'custom', src: '✨', name: '✨ เลือกเอง', type: 'emoji', isPremium: false },
   { id: 'heart-frame', src: '/frames/heart-frame.png', name: '❤️ Heart PNG', type: 'image', isPremium: true },
   { id: 'stars-frame', src: '/frames/stars-frame.png', name: '✨ Stars PNG', type: 'image', isPremium: true },
   { id: 'unicorn', src: '🦄', name: '🦄 Uni', type: 'emoji', isPremium: true }
@@ -315,7 +316,7 @@ export default function PhotoEditor({ photos, onRetake, onRemovePhoto, filterId 
         <div className="w-full md:w-auto flex-shrink-0 flex justify-center bg-[#FFF0F5] md:bg-transparent p-4 md:p-0 z-20 shadow-sm md:shadow-none">
           <div
             ref={stripRef}
-            className="photo-strip-container relative p-4 md:p-6 shadow-2xl transition-all duration-300 ease-in-out flex flex-col items-center gap-4 overflow-hidden origin-top scale-[0.6] sm:scale-[0.7] md:scale-90 lg:scale-100"
+            className="photo-strip-container relative p-4 md:p-6 shadow-2xl transition-all duration-300 ease-in-out flex flex-col items-center gap-4 overflow-hidden origin-top scale-[0.5] min-[380px]:scale-[0.6] sm:scale-[0.7] md:scale-90 lg:scale-100"
             style={{
               minWidth: '320px',
               maxWidth: '380px',
@@ -448,7 +449,16 @@ export default function PhotoEditor({ photos, onRetake, onRemovePhoto, filterId 
                     {isEmojiLoading ? <div className="col-span-6 text-center text-gray-400 text-xs py-10">กำลังโหลด...</div> : (
                       (emojiSearch ? Object.entries(fetchedEmojis).filter(([e, k]) => k.some(ki => ki.includes(emojiSearch.toLowerCase()))).slice(0, 72).map(([e]) => e) : dynamicCategories[activeEmojiCategory]?.icons || [])
                         .map((emoji, i) => (
-                          <button key={i} onClick={() => setCustomEmojis(p => ({ ...p, [activeCorner]: emoji }))} className="text-2xl h-10 flex items-center justify-center hover:bg-white rounded-lg transition-transform active:scale-90">{emoji}</button>
+                          <button
+                            key={i}
+                            onClick={() => {
+                              setCustomEmojis(p => ({ ...p, [activeCorner]: emoji }));
+                              setSelectedFrameOverlay('custom'); // Auto-switch to custom frame
+                            }}
+                            className="text-2xl h-10 flex items-center justify-center hover:bg-white rounded-lg transition-transform active:scale-90"
+                          >
+                            {emoji}
+                          </button>
                         ))
                     )}
                   </div>
