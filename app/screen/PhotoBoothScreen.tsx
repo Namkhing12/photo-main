@@ -51,11 +51,13 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
   const [showTimerMenu, setShowTimerMenu] = useState(false);
 
   // Zoom State (Digital Zoom)
-  const [zoom, setZoom] = useState(0.8);
-  const minZoom = 0.7;
+  const [zoom, setZoom] = useState(1);
+  const minZoom = 1;
   const maxZoom = 3;
 
   const cropImage = async (imageSrc: string, zoomLevel: number): Promise<string> => {
+    if (zoomLevel <= 1) return imageSrc;
+
     return new Promise((resolve) => {
       const img = new Image();
       img.onload = () => {
@@ -65,32 +67,19 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
 
         const w = img.width;
         const h = img.height;
+
+        const cropW = w / zoomLevel;
+        const cropH = h / zoomLevel;
+        const cropX = (w - cropW) / 2;
+        const cropY = (h - cropH) / 2;
+
         canvas.width = w;
         canvas.height = h;
 
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
 
-        // เคลียร์พื้นหลังเป็นดำ
-        ctx.fillStyle = '#000000';
-        ctx.fillRect(0, 0, w, h);
-
-        if (zoomLevel >= 1) {
-          // ซูมเข้า
-          const cropW = w / zoomLevel;
-          const cropH = h / zoomLevel;
-          const cropX = (w - cropW) / 2;
-          const cropY = (h - cropH) / 2;
-          ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, w, h);
-        } else {
-          // ซูมออก (Wide Angle)
-          const drawW = w * zoomLevel;
-          const drawH = h * zoomLevel;
-          const drawX = (w - drawW) / 2;
-          const drawY = (h - drawH) / 2;
-          ctx.drawImage(img, 0, 0, w, h, drawX, drawY, drawW, drawH);
-        }
-
+        ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, w, h);
         resolve(canvas.toDataURL('image/jpeg', 1.0));
       };
       img.src = imageSrc;
@@ -258,8 +247,8 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
               </button>
             </div>
 
-            {/* Camera Area - ปรับปรุงให้เต็มกรอบขาวเสมอ */}
-            <div className="relative w-full max-w-[420px] aspect-[3/4] bg-white rounded-[1.5rem] md:rounded-[2.5rem] p-2 md:p-4 shadow-2xl border border-gray-100 mb-6 flex items-center justify-center overflow-hidden">
+            {/* Camera Area - ปรับเป็นสี่เหลี่ยมจัตุรัสเพื่อให้เห็นมุมกว้างขึ้น */}
+            <div className="relative w-full max-w-[420px] aspect-square bg-white rounded-[1.5rem] md:rounded-[2.5rem] p-2 md:p-4 shadow-2xl border border-gray-100 mb-6 flex items-center justify-center overflow-hidden">
               <div className="relative w-full h-full rounded-[1rem] md:rounded-[1.8rem] overflow-hidden bg-black">
                 <div className="w-full h-full overflow-hidden relative">
                   <Webcam
@@ -270,9 +259,9 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
                     mirrored={facingMode === 'user'}
                     videoConstraints={{
                       width: { min: 1280, ideal: 3840, max: 3840 },
-                      height: { min: 720, ideal: 2160, max: 2160 },
+                      height: { min: 1280, ideal: 3840, max: 3840 },
                       facingMode: facingMode,
-                      aspectRatio: { ideal: 0.75 } // บังคับ 3:4 
+                      aspectRatio: { ideal: 1 } // เปลี่ยนเป็น 1:1 เพื่อความกว้าง 
                     }}
                     style={{ transform: `scale(${zoom})`, transformOrigin: 'center center' }}
                     className={`absolute inset-0 w-full h-full object-cover transition-transform duration-100 ease-linear ${activeFilterClass}`}
