@@ -301,7 +301,7 @@ export default function PhotoEditor({ photos, onRetake, onRemovePhoto, filterId 
   };
 
   return (
-    <div className="min-h-screen bg-[#FFF0F5] flex flex-col items-center font-sans h-screen overflow-hidden">
+    <div className="w-full h-[100dvh] bg-[#FFF0F5] flex flex-col items-center font-sans overflow-hidden overscroll-behavior-none">
       {/* Header - Hidden on mobile to save space */}
       <h1 className="hidden md:block text-xl md:text-2xl font-bold text-pink-500 my-4 text-center px-4">
         Photo Booth By PhotoCute
@@ -313,7 +313,7 @@ export default function PhotoEditor({ photos, onRetake, onRemovePhoto, filterId 
         <div className="w-full md:w-auto flex-shrink-0 flex justify-center bg-[#FFF0F5] md:bg-transparent p-4 md:p-0 z-20 shadow-sm md:shadow-none">
           <div
             ref={stripRef}
-            className="photo-strip-container relative p-4 md:p-6 shadow-2xl transition-all duration-300 ease-in-out flex flex-col items-center gap-4 overflow-hidden origin-top scale-[0.6] sm:scale-[0.8] md:scale-100"
+            className="photo-strip-container relative p-4 md:p-6 shadow-2xl transition-all duration-300 ease-in-out flex flex-col items-center gap-4 overflow-hidden origin-top scale-[0.6] sm:scale-[0.7] md:scale-90 lg:scale-100"
             style={{
               minWidth: '320px',
               maxWidth: '380px',
@@ -345,20 +345,20 @@ export default function PhotoEditor({ photos, onRetake, onRemovePhoto, filterId 
         <div className="flex-1 w-full bg-white md:bg-white/80 md:backdrop-blur-sm rounded-t-[2.5rem] md:rounded-[2rem] shadow-2xl md:shadow-lg border-t md:border border-white/50 flex flex-col overflow-hidden">
 
           {/* Tab Navigation */}
-          <div className="flex justify-around items-center border-b border-gray-100 p-2 md:p-4 bg-white/50">
-            <button onClick={() => setActiveTab('frame')} className={`flex flex-col items-center p-2 rounded-2xl transition-all ${activeTab === 'frame' ? 'text-pink-500 bg-pink-50' : 'text-gray-400'}`}>
+          <div className="flex justify-around items-center border-b border-gray-100 p-2 md:p-4 bg-white/50 backdrop-blur-sm z-30">
+            <button onClick={() => setActiveTab('frame')} className={`flex-1 flex flex-col items-center py-3 rounded-2xl transition-all ${activeTab === 'frame' ? 'text-pink-500 bg-pink-50' : 'text-gray-400'}`}>
               <Palette size={20} />
               <span className="text-[10px] font-bold mt-1">กรอบ/สี</span>
             </button>
-            <button onClick={() => setActiveTab('emoji')} className={`flex flex-col items-center p-2 rounded-2xl transition-all ${activeTab === 'emoji' ? 'text-pink-500 bg-pink-50' : 'text-gray-400'}`}>
+            <button onClick={() => setActiveTab('emoji')} className={`flex-1 flex flex-col items-center py-3 rounded-2xl transition-all ${activeTab === 'emoji' ? 'text-pink-500 bg-pink-50' : 'text-gray-400'}`}>
               <Smile size={20} />
               <span className="text-[10px] font-bold mt-1">อิโมจิ</span>
             </button>
-            <button onClick={() => setActiveTab('filter')} className={`flex flex-col items-center p-2 rounded-2xl transition-all ${activeTab === 'filter' ? 'text-pink-500 bg-pink-50' : 'text-gray-400'}`}>
+            <button onClick={() => setActiveTab('filter')} className={`flex-1 flex flex-col items-center py-3 rounded-2xl transition-all ${activeTab === 'filter' ? 'text-pink-500 bg-pink-50' : 'text-gray-400'}`}>
               <Sparkles size={20} />
               <span className="text-[10px] font-bold mt-1">ฟิลเตอร์</span>
             </button>
-            <button onClick={() => setActiveTab('text')} className={`flex flex-col items-center p-2 rounded-2xl transition-all ${activeTab === 'text' ? 'text-pink-500 bg-pink-50' : 'text-gray-400'}`}>
+            <button onClick={() => setActiveTab('text')} className={`flex-1 flex flex-col items-center py-3 rounded-2xl transition-all ${activeTab === 'text' ? 'text-pink-500 bg-pink-50' : 'text-gray-400'}`}>
               <Type size={20} />
               <span className="text-[10px] font-bold mt-1">ข้อความ</span>
             </button>
@@ -470,7 +470,7 @@ export default function PhotoEditor({ photos, onRetake, onRemovePhoto, filterId 
           </div>
 
           {/* Persistent Action Buttons */}
-          <div className="absolute md:relative bottom-0 left-0 right-0 p-4 md:p-6 bg-white/90 backdrop-blur-md md:bg-transparent border-t md:border-t-0 flex gap-4 z-40">
+          <div className="relative mt-auto p-4 md:p-6 bg-white/90 backdrop-blur-md border-t md:border-t-0 flex gap-4 z-40 pb-[calc(1rem+env(safe-area-inset-bottom))] md:pb-6">
             <button onClick={handleDownload} disabled={loading} className="flex-1 bg-pink-500 hover:bg-pink-600 text-white py-4 rounded-full font-bold shadow-xl flex justify-center items-center gap-2 transition-all active:scale-95 disabled:opacity-50">
               {loading ? <RefreshCw className="animate-spin" size={20} /> : <Download size={20} />}
               {loading ? 'กำลังประมวลผล...' : 'ดาวน์โหลด'}

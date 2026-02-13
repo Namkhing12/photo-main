@@ -176,7 +176,7 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
 
   return (
     <div
-      className="w-full min-h-[100dvh] bg-[#FFF0F5] relative font-sans overflow-x-hidden flex flex-col"
+      className="w-full h-[100dvh] bg-[#FFF0F5] relative font-sans overflow-hidden flex flex-col overscroll-behavior-none"
       onClick={() => { setShowFrameMenu(false); setShowTimerMenu(false); }}
     >
       {/* Background Decor */}
@@ -204,7 +204,7 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
               <div className="relative">
                 <button
                   onClick={(e) => { e.stopPropagation(); setShowFrameMenu(!showFrameMenu); setShowTimerMenu(false); }}
-                  className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-gray-200 text-gray-700 text-xs md:text-sm font-bold hover:border-pink-300 shadow-sm min-w-[110px] md:min-w-[130px] justify-between"
+                  className="flex items-center gap-2 bg-white px-4 py-3 rounded-xl border border-gray-200 text-gray-700 text-xs md:text-sm font-bold hover:border-pink-300 shadow-sm min-w-[110px] md:min-w-[130px] min-h-[44px] justify-between transition-all active:scale-95"
                 >
                   <div className="flex items-center gap-2">
                     <FrameIcon type={selectedFrame.iconType} />
@@ -231,7 +231,7 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
               <div className="relative">
                 <button
                   onClick={(e) => { e.stopPropagation(); setShowTimerMenu(!showTimerMenu); setShowFrameMenu(false); }}
-                  className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-gray-200 text-gray-700 text-xs md:text-sm font-bold hover:border-pink-300 shadow-sm min-w-[100px] md:min-w-[120px] justify-between"
+                  className="flex items-center gap-2 bg-white px-4 py-3 rounded-xl border border-gray-200 text-gray-700 text-xs md:text-sm font-bold hover:border-pink-300 shadow-sm min-w-[100px] md:min-w-[120px] min-h-[44px] justify-between transition-all active:scale-95"
                 >
                   <span>{timerSetting === 0 ? 'ไม่นับ' : `${timerSetting}s`}</span>
                   <ChevronDown size={14} className={`transition-transform ${showTimerMenu ? 'rotate-180' : ''}`} />
