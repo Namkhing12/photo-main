@@ -151,23 +151,53 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
   const resetAll = () => { setPhotos([]); setZoom(1); };
   const deletePhoto = (indexToDelete: number) => { setPhotos(prev => prev.filter((_, index) => index !== indexToDelete)); };
   const handleUploadClick = () => fileInputRef.current?.click();
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  // Utility to resize image
+  const resizeImage = (file: File, maxWidth: number, maxHeight: number): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.src = URL.createObjectURL(file);
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth || height > maxHeight) {
+          const ratio = Math.min(maxWidth / width, maxHeight / height);
+          width = width * ratio;
+          height = height * ratio;
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL(file.type));
+        } else {
+          reject(new Error('Canvas context not available'));
+        }
+        URL.revokeObjectURL(img.src);
+      };
+      img.onerror = (error) => reject(error);
+    });
+  };
+
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
       if (!file.type.startsWith('image/')) {
         alert("กรุณาเลือกไฟล์รูปภาพเท่านั้น");
         return;
       }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (typeof reader.result === 'string') {
-          setPhotos(prev => [...prev, reader.result as string]);
-        }
-      };
-      reader.onerror = () => {
+
+      try {
+        // Resize image to max 1280x1280 to save memory and ensure html-to-image works
+        const resizedImage = await resizeImage(file, 1280, 1280);
+        setPhotos(prev => [...prev, resizedImage]);
+      } catch (error) {
+        console.error("Error resizing image:", error);
         alert("เกิดข้อผิดพลาดในการโหลดรูปภาพ โปรดลองอีกครั้ง");
-      };
-      reader.readAsDataURL(file);
+      }
     }
   };
 
@@ -176,7 +206,7 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
 
   return (
     <div
-      className="w-full h-full bg-[#FFF0F5] relative font-sans overflow-y-auto flex flex-col scroll-smooth"
+      className="w-full min-h-[100dvh] bg-[#FFF0F5] relative font-sans overflow-y-auto flex flex-col scroll-smooth"
       onClick={() => { setShowFrameMenu(false); setShowTimerMenu(false); }}
     >
       {/* Background Decor */}
@@ -389,7 +419,7 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
           </div>
 
           {/* RIGHT SIDE: Preview Strip */}
-          <div className="flex flex-row md:flex-col gap-4 w-full md:w-[140px] md:sticky md:top-8 h-auto md:h-[calc(100vh-120px)] overflow-x-auto md:overflow-x-hidden md:overflow-y-auto pr-2 scrollbar-hide pb-4 md:pb-0">
+          <div className="flex flex-row md:flex-col gap-4 w-full md:w-[140px] md:sticky md:top-8 h-auto md:h-[calc(100dvh-120px)] overflow-x-auto md:overflow-x-hidden md:overflow-y-auto pr-2 scrollbar-hide pb-4 md:pb-0">
             <div className="text-gray-400 text-xs font-bold uppercase tracking-wider text-center mb-1 sticky top-0 left-0 bg-white/90 backdrop-blur-sm py-2 z-10 min-w-[80px] md:min-w-0">Previews</div>
             <div className="flex flex-row md:flex-col gap-3">
               {Array.from({ length: selectedFrame.count }).map((_, i) => {

@@ -55,8 +55,6 @@ const overlayFrames = [
   { id: 'space', src: '🚀', name: '🚀 Galaxy', type: 'emoji', isPremium: false },
   { id: 'cat', src: '🐱', name: '🐱 Meow', type: 'emoji', isPremium: false },
   { id: 'custom', src: '✨', name: '✨ เลือกเอง', type: 'emoji', isPremium: false },
-  { id: 'heart-frame', src: '/frames/heart-frame.png', name: '❤️ Heart PNG', type: 'image', isPremium: true },
-  { id: 'stars-frame', src: '/frames/stars-frame.png', name: '✨ Stars PNG', type: 'image', isPremium: true },
   { id: 'unicorn', src: '🦄', name: '🦄 Uni', type: 'emoji', isPremium: true }
 ];
 
@@ -76,14 +74,14 @@ const renderOverlayFrame = (
     );
   }
 
-  const styleBase = "absolute text-3xl md:text-4xl drop-shadow-md select-none z-20 pointer-events-none";
+  const styleBase = "absolute text-2xl sm:text-3xl md:text-4xl drop-shadow-md select-none z-20 pointer-events-none";
 
   const renderEmojis = (tl: string, tr: string, bl: string, br: string) => (
     <>
-      <div className={`${styleBase} top-2 left-2`}>{tl}</div>
-      <div className={`${styleBase} top-2 right-2`}>{tr}</div>
-      <div className={`${styleBase} bottom-2 left-2`}>{bl}</div>
-      <div className={`${styleBase} bottom-2 right-2`}>{br}</div>
+      <div className={`${styleBase} top-1 left-1 sm:top-2 sm:left-2`}>{tl}</div>
+      <div className={`${styleBase} top-1 right-1 sm:top-2 sm:right-2`}>{tr}</div>
+      <div className={`${styleBase} bottom-1 left-1 sm:bottom-2 sm:left-2`}>{bl}</div>
+      <div className={`${styleBase} bottom-1 right-1 sm:bottom-2 sm:right-2`}>{br}</div>
     </>
   );
 
@@ -229,17 +227,17 @@ export default function PhotoEditor({ photos, onRetake, onRemovePhoto, filterId 
 
         // Use html-to-image to generate Blob
         const blob = await toBlob(stripRef.current, {
-          cacheBust: true,
-          pixelRatio: 2,
-          backgroundColor: undefined,
+          // cacheBust removed to fix local blob issue
+          pixelRatio: 3, // Increase resolution for "full size" feel
+          backgroundColor: '#ffffff', // Ensure no transparent background
           style: {
-            transform: 'none',
+            transform: 'scale(1)', // Explicitly set scale to 1 (full size)
             margin: '0',
-            padding: '24px', // Force consistent padding (equivalent to p-6)
+            padding: '24px', // Keep padding consistent (approx p-6)
             width: 'auto',
             height: 'auto',
-            boxShadow: 'none', // Optional: remove shadow from capture if desired, or keep it. Keeping strictly layout resets.
-            transformOrigin: 'top left'
+            transformOrigin: 'top left',
+            boxShadow: 'none' // Remove shadow for clean capture
           },
           filter: (node: HTMLElement | SVGElement) => {
             if (node instanceof HTMLElement && node.dataset.html2canvasIgnore === 'true') {
@@ -278,49 +276,47 @@ export default function PhotoEditor({ photos, onRetake, onRemovePhoto, filterId 
 
 
   return (
-    <div className="w-full min-h-screen bg-[#FFF0F5] flex flex-col items-center font-sans overflow-y-auto relative scroll-smooth">
-      {/* Header - Hidden on mobile to save space */}
-      <h1 className="hidden md:block text-xl md:text-2xl font-bold text-pink-500 my-4 text-center px-4">
+    <div className="w-full h-[100dvh] bg-[#FFF0F5] flex flex-col font-sans overflow-hidden relative">
+      <h1 className="hidden md:block shrink-0 text-xl font-bold text-pink-500 my-4 text-center px-4">
         Photo Booth By PhotoCute
       </h1>
 
-      <div className="flex flex-col md:flex-row items-center md:items-start justify-center w-full max-w-6xl md:p-4 gap-2 md:gap-4">
+      <div className="flex flex-col md:flex-row w-full h-full overflow-hidden max-w-6xl mx-auto md:px-4 md:pb-4 gap-0 md:gap-6">
 
         {/* --- LEFT: Shared Preview --- */}
-        <div className="w-full md:w-auto flex-shrink-0 flex justify-center bg-[#FFF0F5] md:bg-transparent pt-2 md:p-0 z-20">
-          <div
-            ref={stripRef}
-            className="photo-strip-container relative p-4 md:p-6 shadow-2xl transition-all duration-300 ease-in-out flex flex-col items-center gap-4 overflow-hidden origin-top scale-[0.6] min-[380px]:scale-[0.75] sm:scale-[0.8] md:scale-85 lg:scale-95 mb-[-120px] min-[380px]:mb-[-80px] md:mb-0"
-            style={{
-              minWidth: '320px',
-              maxWidth: '380px',
-              background: isCustomActive ? customColor : selectedColor.hex,
-              color: (isCustomActive && customColor === '#000000') || (!isCustomActive && selectedColor.id === 'black') ? 'white' : '#333'
-            }}
-          >
-            <div className={`grid gap-3 w-full relative z-10 ${photos.length <= 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
-              {photos.map((img, idx) => (
-                <div key={idx} className="relative aspect-[3/4] overflow-hidden group rounded-sm">
-                  <img
-                    src={img}
-                    alt={`snap-${idx}`}
-                    className={`photo-item w-full h-full object-cover ${activeFilterClass}`}
-                    style={{ transform: 'translateZ(0)', filter: convertTailwindToCssFilter(activeFilterClass) }}
-                  />
-                  {/* Delete button removed as requested */}
-                </div>
-              ))}
-            </div>
-            {renderOverlayFrame(selectedFrameOverlay, customEmojis)}
-            <div className="mt-4 text-center font-bold tracking-widest uppercase opacity-80 break-words w-full px-2 relative z-30" style={{ color: 'inherit' }}>
-              <div className="text-sm">{footerTitle}</div>
-              <div className="text-[10px] mt-1 font-medium opacity-70">{footerSubtitle}</div>
+        <div className="w-full flex-1 border-b border-gray-100 md:border-b-0 md:flex-[1.2] lg:flex-[1.5] flex justify-center bg-[#FFF0F5] md:bg-transparent overflow-y-auto pt-6 pb-20 md:pb-0 px-2 sm:px-4 z-20 custom-scrollbar relative">
+          <div className="w-full max-w-[300px] sm:max-w-[340px] md:max-w-[380px] mx-auto h-max flex justify-center pb-6">
+            <div
+              ref={stripRef}
+              className="photo-strip-container relative p-3 sm:p-4 md:p-6 shadow-2xl transition-all duration-300 ease-in-out flex flex-col items-center gap-3 sm:gap-4 overflow-hidden w-full"
+              style={{
+                background: isCustomActive ? customColor : selectedColor.hex,
+                color: (isCustomActive && customColor === '#000000') || (!isCustomActive && selectedColor.id === 'black') ? 'white' : '#333'
+              }}
+            >
+              <div className={`grid gap-2 sm:gap-3 w-full relative z-10 ${photos.length <= 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
+                {photos.map((img, idx) => (
+                  <div key={idx} className="relative aspect-[3/4] overflow-hidden group rounded-sm">
+                    <img
+                      src={img}
+                      alt={`snap-${idx}`}
+                      className={`photo-item w-full h-full object-cover ${activeFilterClass}`}
+                      style={{ transform: 'translateZ(0)', filter: convertTailwindToCssFilter(activeFilterClass) }}
+                    />
+                  </div>
+                ))}
+              </div>
+              {renderOverlayFrame(selectedFrameOverlay, customEmojis)}
+              <div className="mt-2 sm:mt-4 text-center font-bold tracking-widest uppercase opacity-80 break-words w-full px-2 relative z-30" style={{ color: 'inherit' }}>
+                <div className="text-xs sm:text-sm">{footerTitle}</div>
+                <div className="text-[9px] sm:text-[10px] mt-1 font-medium opacity-70">{footerSubtitle}</div>
+              </div>
             </div>
           </div>
         </div>
 
         {/* --- RIGHT: Tools Panel (Bottom Sheet style on Mobile) --- */}
-        <div className="flex-1 w-full bg-white md:bg-white/80 md:backdrop-blur-sm rounded-t-[2.5rem] md:rounded-[2rem] shadow-2xl md:shadow-lg border-t md:border border-white/50 flex flex-col overflow-hidden">
+        <div className="w-full md:w-[380px] lg:w-[420px] shrink-0 h-[45vh] min-h-[350px] md:h-full bg-white md:bg-white/80 md:backdrop-blur-sm shadow-[0_-10px_40px_-10px_rgba(0,0,0,0.1)] md:shadow-lg rounded-t-[2rem] md:rounded-[2rem] flex flex-col overflow-hidden relative z-30 border-t md:border border-gray-100">
 
           {/* Tab Navigation */}
           <div className="flex justify-around items-center border-b border-gray-100 p-2 md:p-4 bg-white/50 backdrop-blur-sm z-30">

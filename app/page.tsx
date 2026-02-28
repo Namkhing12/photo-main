@@ -11,7 +11,7 @@ export default function Home() {
   }, [router]);
 
   return (
-    <div className="min-h-screen bg-pink-50 flex items-center justify-center">
+    <div className="min-h-[100dvh] bg-pink-50 flex items-center justify-center">
       <div className="text-pink-500 font-medium">กำลังไปหน้าถ่ายรูป...</div>
     </div>
   );

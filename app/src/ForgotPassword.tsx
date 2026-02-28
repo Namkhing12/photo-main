@@ -38,7 +38,7 @@ export default function ForgotPassword() {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-pink-50 font-sans">
+        <div className="min-h-[100dvh] flex items-center justify-center bg-pink-50 font-sans">
             <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-hidden p-8 border border-pink-100 relative">
 
                 {/* ปุ่มย้อนกลับ */}

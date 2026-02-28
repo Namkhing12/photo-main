@@ -37,7 +37,7 @@ export default function PhotoBoothPage() {
     }
 
     return (
-        <main className="min-h-screen bg-pink-50 flex items-center justify-center p-4 font-sans text-gray-800">
+        <main className="min-h-[100dvh] bg-pink-50 flex items-center justify-center p-4 font-sans text-gray-800">
             <PhotoBooth onFinish={handleFinish} />
         </main>
     );
