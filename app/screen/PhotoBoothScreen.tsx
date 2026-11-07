@@ -37,13 +37,15 @@ const frameOptions: FrameOption[] = [
 ];
 const timerOptions = [0, 3, 5, 10];
 
-interface PhotoBoothProps { onFinish?: (photos: string[], filterId: string) => void; }
+/** รูปที่ถ่าย + ฟิลเตอร์ที่เลือกไว้ตอนถ่าย (แต่ละรูปฟิลเตอร์ต่างกันได้) */
+export type Shot = { src: string; filterId: string };
+interface PhotoBoothProps { onFinish?: (shots: Shot[]) => void; }
 
 export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
   const webcamRef = useRef<Webcam>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [photos, setPhotos] = useState<string[]>([]);
+  const [photos, setPhotos] = useState<Shot[]>([]);
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
   const [selectedFrame, setSelectedFrame] = useState<FrameOption>(frameOptions[0]);
   const [selectedFilter, setSelectedFilter] = useState<string>('normal');
@@ -56,7 +58,7 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
   const [cameraKey, setCameraKey] = useState(0); // เปลี่ยนค่าเพื่อ remount กล้อง (ลองใหม่)
   const [showGrid, setShowGrid] = useState(false);
   const [flashKey, setFlashKey] = useState(0);
-  const [reviewShot, setReviewShot] = useState<string | null>(null); // ค้างภาพที่เพิ่งถ่าย 3 วินาที
+  const [reviewShot, setReviewShot] = useState<Shot | null>(null); // ค้างภาพที่เพิ่งถ่าย 3 วินาที
   const [filterGroup, setFilterGroup] = useState<FilterGroup | 'all' | 'fav'>('all');
   const [filtersOpen, setFiltersOpen] = useState(false); // มือถือ: แถบฟิลเตอร์พับเก็บได้ (PC แสดงตลอด)
   // Zoom State (Digital Zoom)
@@ -138,9 +140,10 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
         }
         setFlashKey(k => k + 1); // เอฟเฟกต์แฟลช
         // ไม่ให้เกินจำนวนช่องของเฟรม
-        setPhotos(prev => (prev.length >= maxCount ? prev : [...prev, shot]));
+        const newShot: Shot = { src: shot, filterId: selectedFilter };
+        setPhotos(prev => (prev.length >= maxCount ? prev : [...prev, newShot]));
         // ค้างภาพที่ถ่ายไว้บนจอกล้อง 3 วินาที ให้ดูผลก่อนถ่ายรูปต่อไป
-        setReviewShot(shot);
+        setReviewShot(newShot);
         if (reviewRef.current) clearTimeout(reviewRef.current);
         reviewRef.current = setTimeout(() => { reviewRef.current = null; setReviewShot(null); }, 3000);
       } finally {
@@ -160,7 +163,7 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
       }
     }, 1000);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timerSetting, zoom, selectedFrame.count, facingMode]);
+  }, [timerSetting, zoom, selectedFrame.count, facingMode, selectedFilter]);
 
   const resetAll = () => { stopCountdown(); setPhotos([]); setZoom(1); };
   const deletePhoto = (indexToDelete: number) => { endReview(); setPhotos(prev => prev.filter((_, index) => index !== indexToDelete)); };
@@ -215,7 +218,7 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
       try {
         // Resize image to max 1280x1280 to save memory and ensure html-to-image works
         const resizedImage = await resizeImage(file, 1280, 1280);
-        setPhotos(prev => (prev.length >= selectedFrame.count ? prev : [...prev, resizedImage]));
+        setPhotos(prev => (prev.length >= selectedFrame.count ? prev : [...prev, { src: resizedImage, filterId: selectedFilter }]));
       } catch (error) {
         console.error("Error resizing image:", error);
         alert("เกิดข้อผิดพลาดในการโหลดรูปภาพ โปรดลองอีกครั้ง");
@@ -234,7 +237,7 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
       : filterGroup === 'fav' ? favoriteFilters.includes(f.id) || f.id === 'normal'
         : f.group === filterGroup || f.id === 'normal'
   );
-  const swatchPhoto = photos[photos.length - 1];
+  const swatchPhoto = photos[photos.length - 1]?.src;
 
   return (
     <div className="relative w-full min-h-full font-sans text-plum" onClick={closeMenus}>
@@ -452,12 +455,12 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
                       className="absolute inset-0 z-30 block h-full w-full cursor-pointer"
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={reviewShot} alt="ภาพที่เพิ่งถ่าย" className="h-full w-full object-cover" style={{ filter: activeFilterStyle }} />
+                      <img src={reviewShot.src} alt="ภาพที่เพิ่งถ่าย" className="h-full w-full object-cover" style={{ filter: getFilterStyle(reviewShot.filterId) }} />
                       <span className="absolute left-1/2 top-3 -translate-x-1/2 whitespace-nowrap rounded-full bg-white/90 px-3 py-1 text-[11px] font-semibold text-blush-600 shadow-sm">
                         ✓ รูปที่ {photos.length}/{selectedFrame.count}
                       </span>
                       <span className="absolute inset-x-6 bottom-5 h-1.5 overflow-hidden rounded-full bg-white/40">
-                        <span key={reviewShot.length + photos.length} className="animate-review block h-full rounded-full bg-white" />
+                        <span key={reviewShot.src.length + photos.length} className="animate-review block h-full rounded-full bg-white" />
                       </span>
                     </button>
                   )}
@@ -588,7 +591,7 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
                 <button onClick={() => deletePhoto(photos.length - 1)} className="chip w-full justify-center px-6 py-3 text-sm sm:w-auto md:py-3.5">
                   <RefreshCw size={16} /> ถ่ายรูปสุดท้ายใหม่
                 </button>
-                <button onClick={() => onFinish?.(photos.slice(0, selectedFrame.count), selectedFilter)} className="btn-candy w-full px-9 py-3 text-base sm:w-auto md:py-3.5">
+                <button onClick={() => onFinish?.(photos.slice(0, selectedFrame.count))} className="btn-candy w-full px-9 py-3 text-base sm:w-auto md:py-3.5">
                   <span className="relative z-10">ไปแต่งรูปกันเลย</span>
                   <ArrowRight size={18} className="relative z-10" />
                 </button>
@@ -613,7 +616,7 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
                     {photo ? (
                       <>
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={photo} alt={`รูปที่ ${i + 1}`} className="h-full w-full rounded-xl object-cover" style={{ filter: activeFilterStyle }} />
+                        <img src={photo.src} alt={`รูปที่ ${i + 1}`} className="h-full w-full rounded-xl object-cover" style={{ filter: getFilterStyle(photo.filterId) }} />
                         <button
                           onClick={() => deletePhoto(i)}
                           aria-label={`ลบรูปที่ ${i + 1}`}

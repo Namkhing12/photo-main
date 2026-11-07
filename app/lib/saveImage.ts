@@ -1,5 +1,5 @@
-import { toBlob } from 'html-to-image';
-import { bakePhotos } from './bakePhotos';
+import { toCanvas } from 'html-to-image';
+import { renderPhoto } from './renderPhoto';
 
 // ───────────────────────────────────────────────────────────────
 // จับภาพแถบรูป + บันทึกให้เหมาะกับแต่ละแพลตฟอร์ม
@@ -38,35 +38,134 @@ const pickPixelRatio = (node: HTMLElement, p: Platform) => {
   return Math.max(1, Math.min(3, Math.sqrt(maxArea / (w * h))));
 };
 
+const loadImg = (src: string) =>
+  new Promise<HTMLImageElement>((resolve, reject) => {
+    const im = new Image();
+    im.onload = () => resolve(im);
+    im.onerror = () => reject(new Error('โหลดรูปไม่สำเร็จ'));
+    im.src = src;
+  });
+
+const layerOf = (n: Node) => (n instanceof HTMLElement ? n.dataset.layer : undefined);
+const notIgnored = (n: HTMLElement | SVGElement) => !(n instanceof HTMLElement && n.dataset.html2canvasIgnore === 'true');
+const BLANK = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+
+/**
+ * จับภาพ "ชั้นเดียว" ของแถบรูป จากสำเนาที่วางไว้นอกจอ
+ * ชั้นที่ไม่ต้องการจะถูกซ่อนด้วย visibility (layout เดิมไม่ขยับ และผู้ใช้ไม่เห็นรูปกะพริบ)
+ */
+const captureLayer = async (
+  node: HTMLElement,
+  keep: (child: Element) => boolean,
+  options: Parameters<typeof toCanvas>[1],
+  rootStyle?: Partial<CSSStyleDeclaration>,
+) => {
+  const W = node.offsetWidth;
+  const H = node.offsetHeight;
+  const host = document.createElement('div');
+  host.setAttribute('aria-hidden', 'true');
+  host.style.cssText = `position:fixed;left:-100000px;top:0;width:${W}px;height:${H}px;pointer-events:none;`;
+  const clone = node.cloneNode(true) as HTMLElement;
+  clone.style.width = `${W}px`;
+  clone.style.height = `${H}px`;
+  if (rootStyle) Object.assign(clone.style, rootStyle);
+  for (const child of Array.from(clone.children)) {
+    if (keep(child)) continue;
+    (child as HTMLElement).style.visibility = 'hidden';
+    // ไม่ต้องฝังรูปใหญ่ที่ถูกซ่อนลงใน SVG (ไฟล์เล็กลง เร็วขึ้น)
+    child.querySelectorAll('img').forEach(im => { im.src = BLANK; im.removeAttribute('srcset'); });
+  }
+  host.appendChild(clone);
+  document.body.appendChild(host);
+  try {
+    await Promise.all(Array.from(clone.querySelectorAll('img')).map(im => im.decode().catch(() => undefined)));
+    return await toCanvas(clone, { width: W, height: H, ...options });
+  } finally {
+    host.remove();
+  }
+};
+
+/**
+ * สร้างไฟล์รูปจากแถบรูป โดยประกอบเป็นชั้น ๆ บน canvas เดียว
+ *  1) พื้นหลัง + ลาย (data-layer="bottom")   ← html-to-image
+ *  2) รูปถ่าย img.photo-item + ฟิลเตอร์ของแต่ละรูป ← วาดเองด้วย drawImage
+ *  3) กรอบรูปแบบภาพ (data-layer="multiply")  ← วาดเองด้วยโหมด multiply
+ *  4) ข้อความ/สติกเกอร์/กรอบอิโมจิ (ชั้นอื่น)   ← html-to-image พื้นโปร่งใส
+ * เหตุผล: iOS/Android บางรุ่นวาดรูปถ่าย (<img> ขนาดใหญ่) ใน SVG foreignObject ไม่ขึ้นเลย
+ */
 export const captureNode = async (node: HTMLElement): Promise<Blob> => {
   const p = detectPlatform();
-  // ห้ามส่ง backgroundColor ของไลบรารี: html-to-image จะเอาไปเขียนทับ background-color ของแถบรูป
-  // ทำให้สีกรอบแบบสีทึบ (ดำ ชมพู ฟ้า ฯลฯ) กลายเป็นสีขาวในไฟล์ที่ดาวน์โหลด
-  // ใช้สีพื้นจริงของ node แทน (ถ้าโปร่งใสค่อยใช้ขาว)
+  const W = node.offsetWidth;
+  const H = node.offsetHeight;
+  const nodeRect = node.getBoundingClientRect();
+  const k = nodeRect.width ? W / nodeRect.width : 1; // ตัดผลของ transform (อนิเมชันพิมพ์) ออก
+  const rel = (el: Element) => {
+    const r = el.getBoundingClientRect();
+    return { x: (r.left - nodeRect.left) * k, y: (r.top - nodeRect.top) * k, w: r.width * k, h: r.height * k };
+  };
+
+  // ห้ามส่ง backgroundColor ที่ต่างจากสีจริง: html-to-image จะเขียนทับ background-color ของแถบรูป
   const bg = getComputedStyle(node).backgroundColor;
   const isTransparent = !bg || bg === 'transparent' || /rgba\(.*,\s*0\)$/.test(bg);
   const pixelRatio = pickPixelRatio(node, p);
-  const options = {
-    pixelRatio,
+  const baseStyle = { margin: '0', boxShadow: 'none', transform: 'none', borderRadius: '0' };
+  const common = { pixelRatio, skipAutoScale: true, style: baseStyle, filter: notIgnored };
+
+  // ชั้น 1: พื้นหลัง + ลาย
+  const out = await captureLayer(node, child => layerOf(child) === 'bottom', {
+    ...common,
     backgroundColor: isTransparent ? '#ffffff' : bg,
-    // ตัดมุมโค้ง/เงา/การเลื่อนของอนิเมชันพิมพ์ ออกจากไฟล์
-    style: { margin: '0', boxShadow: 'none', transform: 'none', borderRadius: '0' },
-    filter: (n: HTMLElement | SVGElement) => !(n instanceof HTMLElement && n.dataset.html2canvasIgnore === 'true'),
-  };
-  // อบฟิลเตอร์ลงรูปถ่ายก่อน — iOS / Android บางรุ่นวาดรูปที่มี CSS filter ใน foreignObject ไม่ขึ้น
-  const restore = await bakePhotos(node, pixelRatio);
-  try {
-    // WebKit และ Android บางรุ่นถอดรหัสรูปใน SVG ไม่ทันในรอบแรก → อุ่นเครื่องก่อน (iOS 2 รอบ)
-    const warmups = p.isIOS || p.isSafari ? 2 : p.isMobile ? 1 : 0;
-    for (let i = 0; i < warmups; i++) {
-      try { await toBlob(node, { ...options, pixelRatio: 1 }); } catch { /* ignore warm-up errors */ }
-    }
-    const blob = await toBlob(node, options);
-    if (!blob) throw new Error('สร้างรูปไม่สำเร็จ');
-    return blob;
-  } finally {
-    restore();
+  });
+  const ctx = out.getContext('2d');
+  if (!ctx) throw new Error('Canvas context not available');
+  const sx = out.width / W;
+  const sy = out.height / H;
+
+  // ชั้น 2: รูปถ่าย (แต่ละรูปมีฟิลเตอร์ของตัวเอง)
+  for (const img of Array.from(node.querySelectorAll<HTMLImageElement>('img.photo-item'))) {
+    const box = rel(img);
+    if (!box.w || !box.h || !img.src) continue;
+    const photo = await renderPhoto(img.src, img.style.filter || 'none', box.w, box.h, pixelRatio);
+    const cell = img.parentElement;
+    const radius = cell ? parseFloat(getComputedStyle(cell).borderTopLeftRadius) || 0 : 0;
+    ctx.save();
+    ctx.beginPath();
+    if (radius > 0 && typeof ctx.roundRect === 'function') ctx.roundRect(box.x * sx, box.y * sy, box.w * sx, box.h * sy, radius * sx);
+    else ctx.rect(box.x * sx, box.y * sy, box.w * sx, box.h * sy);
+    ctx.clip();
+    ctx.drawImage(photo, box.x * sx, box.y * sy, box.w * sx, box.h * sy);
+    ctx.restore();
+    photo.width = 0; photo.height = 0; // คืนหน่วยความจำ (สำคัญบน iOS)
   }
+
+  // ชั้น 3: กรอบรูปแบบภาพที่ใช้ mix-blend-mode: multiply
+  for (const img of Array.from(node.querySelectorAll<HTMLImageElement>('[data-layer="multiply"] img'))) {
+    const box = rel(img);
+    try {
+      const im = await loadImg(img.currentSrc || img.src);
+      ctx.save();
+      ctx.globalCompositeOperation = 'multiply';
+      ctx.globalAlpha = parseFloat(getComputedStyle(img).opacity) || 1;
+      ctx.drawImage(im, box.x * sx, box.y * sy, box.w * sx, box.h * sy);
+      ctx.restore();
+    } catch { /* ข้ามกรอบที่โหลดไม่ได้ */ }
+  }
+
+  // ชั้น 4: ข้อความ สติกเกอร์ กรอบอิโมจิ (พื้นโปร่งใส)
+  const keepTop = (child: Element) => !['bottom', 'photos', 'multiply'].includes(layerOf(child) ?? '');
+  const clearBg = { background: 'transparent', backgroundColor: 'transparent', backgroundImage: 'none' };
+  // WebKit มักวาดฟอนต์/SVG ไม่ครบในรอบแรก → อุ่นเครื่องหนึ่งรอบ
+  if (p.isIOS || p.isSafari) {
+    try { const w = await captureLayer(node, keepTop, { ...common, pixelRatio: 1 }, clearBg); w.width = 0; w.height = 0; } catch { /* ignore */ }
+  }
+  const top = await captureLayer(node, keepTop, common, clearBg);
+  ctx.drawImage(top, 0, 0, out.width, out.height);
+  top.width = 0; top.height = 0;
+
+  const blob = await new Promise<Blob | null>(resolve => out.toBlob(resolve, 'image/png'));
+  out.width = 0; out.height = 0;
+  if (!blob) throw new Error('สร้างรูปไม่สำเร็จ');
+  return blob;
 };
 
 export const canShareFile = (file: File) => {

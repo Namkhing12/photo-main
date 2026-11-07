@@ -111,7 +111,7 @@ const renderPattern = (id: PatternId) => {
     },
   };
   if (id === 'none') return null;
-  return <div className="pointer-events-none absolute inset-0 z-0" style={bg[id]} aria-hidden />;
+  return <div data-layer="bottom" className="pointer-events-none absolute inset-0 z-0" style={bg[id]} aria-hidden />;
 };
 
 // ธีมเทศกาล: แตะทีเดียวได้ทั้งสี กรอบ ลวดลาย และข้อความ
@@ -243,7 +243,7 @@ const renderOverlayFrame = (
 
   if (frame.type === 'image') {
     return (
-      <div className="absolute inset-0 z-20 pointer-events-none select-none">
+      <div data-layer="multiply" className="absolute inset-0 z-20 pointer-events-none select-none">
         <img src={frame.src} alt={frame.name} className="w-full h-full object-fill opacity-90" style={{ mixBlendMode: 'multiply' }} />
       </div>
     );
@@ -304,9 +304,11 @@ interface PhotoEditorProps {
   photos: string[];
   onRetake: () => void;
   filterId?: string;
+  /** ฟิลเตอร์ของแต่ละรูป (ตามที่เลือกตอนถ่าย) */
+  photoFilters?: string[];
 }
 
-export default function PhotoEditor({ photos, onRetake, filterId = 'normal' }: PhotoEditorProps) {
+export default function PhotoEditor({ photos, onRetake, filterId = 'normal', photoFilters: initialPhotoFilters }: PhotoEditorProps) {
   const [selectedColor, setSelectedColor] = useState(frameColors[1]);
   const [customColor, setCustomColor] = useState('#ffffff');
   const [isCustomActive, setIsCustomActive] = useState(false);
@@ -321,7 +323,14 @@ export default function PhotoEditor({ photos, onRetake, filterId = 'normal' }: P
   const [dynamicCategories, setDynamicCategories] = useState<{ category: string, icons: string[] }[]>(commonEmojisFallback);
   const [activeCorner, setActiveCorner] = useState<'topLeft' | 'topRight' | 'bottomLeft' | 'bottomRight'>('topLeft');
   const [fetchTrigger, setFetchTrigger] = useState(0);
-  const [selectedFilter, setSelectedFilter] = useState<string>(filterId);
+  // ฟิลเตอร์แยกรายรูป + เลือกได้ว่าจะเปลี่ยนทุกรูปหรือเฉพาะรูปไหน
+  const [photoFilters, setPhotoFilters] = useState<string[]>(() => photos.map((_, i) => initialPhotoFilters?.[i] ?? filterId));
+  const [filterTarget, setFilterTarget] = useState<'all' | number>('all');
+  const applyFilter = (id: string) =>
+    setPhotoFilters(prev => prev.map((f, i) => (filterTarget === 'all' || filterTarget === i ? id : f)));
+  const selectedFilter = filterTarget === 'all'
+    ? (photoFilters.every(f => f === photoFilters[0]) ? photoFilters[0] : null)
+    : photoFilters[filterTarget];
   const { favoriteFilters, toggleFavorite, sortedFilters } = useFavoriteFilters();
   const [footerTitle, setFooterTitle] = useState('Photo Booth');
   const [footerSubtitle, setFooterSubtitle] = useState('✦ 2026 · PhotoCute ✦');
@@ -507,12 +516,13 @@ export default function PhotoEditor({ photos, onRetake, filterId = 'normal' }: P
     return () => { clearTimeout(timeoutId); controller.abort(); };
   }, [fetchTrigger]);
 
-  const photoFilterStyle = getFilterStyle(selectedFilter);
   const stripBackground = isCustomActive ? customColor : selectedColor.hex;
   const stripTextColor = getReadableTextColor(stripBackground);
 
   // ── ดาวน์โหลด / บันทึกรูป ──
-  type SavedImage = { blob: Blob; url: string; file: File };
+  // dataUrl: ใช้แสดงพรีวิว/ดาวน์โหลดบน iOS — Chrome / Firefox / Edge บน iPhone "บันทึกรูปภาพ" (กดค้าง)
+  // และ <a download> จาก blob: URL ไม่ได้ เพราะแอปดึงรูปนอกหน้าเว็บ แต่ data: URL ใช้ได้
+  type SavedImage = { blob: Blob; url: string; dataUrl: string; file: File };
   const [saved, setSaved] = useState<SavedImage | null>(null);
   const [saveNote, setSaveNote] = useState<string | null>(null);
   const [platform] = useState(() => detectPlatform());
@@ -542,7 +552,13 @@ export default function PhotoEditor({ photos, onRetake, filterId = 'normal' }: P
       }
       // มือถือ: เปิดหน้าต่างพรีวิว แล้วให้ผู้ใช้แตะ "บันทึก" อีกครั้ง
       // (iOS ต้องเรียก share จากการแตะโดยตรง ถ้าเรียกหลังสร้างรูปเสร็จจะถูกบล็อก)
-      setSaved({ blob, url, file });
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const fr = new FileReader();
+        fr.onload = () => resolve(String(fr.result));
+        fr.onerror = () => reject(new Error('อ่านไฟล์รูปไม่สำเร็จ'));
+        fr.readAsDataURL(blob);
+      });
+      setSaved({ blob, url, dataUrl, file });
     } catch (err) {
       console.error('Capture failure:', err);
       alert('ขออภัย! สร้างรูปไม่สำเร็จ: ' + (err instanceof Error ? err.message : 'ข้อผิดพลาดที่ไม่รู้จัก'));
@@ -555,11 +571,16 @@ export default function PhotoEditor({ photos, onRetake, filterId = 'normal' }: P
     if (!saved) return;
     try {
       if (platform.isIOS && savedCanShare) {
-        const r = await shareFile(saved.file);
-        if (r === 'shared') setSaveNote('เรียบร้อย! ถ้าเลือก "บันทึกภาพ" รูปจะอยู่ในแอปรูปภาพ ✦');
-        return;
+        try {
+          const r = await shareFile(saved.file);
+          if (r === 'shared') setSaveNote('เรียบร้อย! ถ้าเลือก "บันทึกภาพ" รูปจะอยู่ในแอปรูปภาพ ✦');
+          return;
+        } catch (err) {
+          // บางเบราว์เซอร์บน iOS (เช่น Chrome รุ่นเก่า) แชร์ไฟล์ไม่ได้ → ดาวน์โหลดแทน
+          console.warn('Share failed, fallback to download:', err);
+        }
       }
-      downloadUrl(saved.url, saved.file.name);
+      downloadUrl(platform.isIOS ? saved.dataUrl : saved.url, saved.file.name);
       setSaveNote(platform.isIOS
         ? 'รูปถูกบันทึกในแอป "ไฟล์" (Files) › ดาวน์โหลด — หรือกดค้างที่รูปด้านบนแล้วเลือก "บันทึกลงในรูปภาพ"'
         : 'บันทึกแล้ว! ดูได้ในแกลเลอรี หรือโฟลเดอร์ Download ✦');
@@ -628,16 +649,23 @@ export default function PhotoEditor({ photos, onRetake, filterId = 'normal' }: P
                   style={{ background: stripBackground, color: stripTextColor }}
                 >
                   {renderPattern(selectedPattern)}
-                  <div className={`relative z-10 grid w-full gap-2 sm:gap-2.5 ${photos.length <= 2 ? 'grid-cols-1' : 'grid-cols-2'}`}>
+                  <div data-layer="photos" className={`relative z-10 grid w-full gap-2 sm:gap-2.5 ${photos.length <= 2 ? 'grid-cols-1' : 'grid-cols-2'}`}>
                     {photos.map((img, idx) => (
-                      <div key={idx} className="relative aspect-[3/4] overflow-hidden rounded-[3px]">
+                      <div
+                        key={idx}
+                        className="relative aspect-[3/4] overflow-hidden rounded-[3px]"
+                        onClick={activeTab === 'filter' && photos.length > 1 ? () => setFilterTarget(idx) : undefined}
+                      >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={img}
                           alt={`snap-${idx}`}
                           className="photo-item h-full w-full object-cover"
-                          style={{ transform: 'translateZ(0)', filter: photoFilterStyle }}
+                          style={{ transform: 'translateZ(0)', filter: getFilterStyle(photoFilters[idx] ?? 'normal') }}
                         />
+                        {activeTab === 'filter' && filterTarget === idx && (
+                          <div data-html2canvas-ignore="true" className="pointer-events-none absolute inset-0 rounded-[3px] ring-4 ring-inset ring-blush-500/90" />
+                        )}
                       </div>
                     ))}
                   </div>
@@ -972,6 +1000,33 @@ export default function PhotoEditor({ photos, onRetake, filterId = 'normal' }: P
             {activeTab === 'filter' && (
               <div key="filter" className="animate-rise">
                 <h3 className="eyebrow mb-3 px-1">filter mood · แตะดาวเพื่อปักหมุด</h3>
+                {photos.length > 1 && (
+                  <div className="mb-3">
+                    <p className="mb-1.5 px-1 text-[11px] font-medium text-plum-soft">ใส่ฟิลเตอร์ให้ — แตะรูปบนแถบเพื่อเลือกก็ได้</p>
+                    <div className="no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+                      <button
+                        onClick={() => setFilterTarget('all')}
+                        aria-pressed={filterTarget === 'all'}
+                        className={`chip shrink-0 whitespace-nowrap px-3 py-1.5 text-[11px] ${filterTarget === 'all' ? 'chip-active' : ''}`}
+                      >
+                        ทุกรูป
+                      </button>
+                      {photos.map((img, i) => (
+                        <button
+                          key={i}
+                          onClick={() => setFilterTarget(i)}
+                          aria-pressed={filterTarget === i}
+                          aria-label={`รูปที่ ${i + 1}`}
+                          className={`relative h-12 w-9 shrink-0 overflow-hidden rounded-lg border-2 transition-all ${filterTarget === i ? 'border-blush-500 shadow-[0_6px_14px_-6px_rgba(242,86,143,0.9)]' : 'border-white/80 opacity-80 hover:opacity-100'}`}
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={img} alt="" className="h-full w-full object-cover" style={{ filter: getFilterStyle(photoFilters[i] ?? 'normal') }} />
+                          <span className="absolute bottom-0 right-0 rounded-tl-md bg-white/90 px-1 text-[9px] font-bold text-blush-600">{i + 1}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div className="no-scrollbar -mx-1 mb-3 flex gap-1.5 overflow-x-auto px-1">
                   {[...(favoriteFilters.length > 0 ? [{ id: 'fav' as const, label: '⭐ ที่ชอบ' }] : []), ...filterGroups].map(g => (
                     <button key={g.id} onClick={() => setFilterGroup(g.id)} className={`chip shrink-0 whitespace-nowrap px-3 py-1.5 text-[11px] ${filterGroup === g.id ? 'chip-active' : ''}`}>{g.label}</button>
@@ -986,12 +1041,12 @@ export default function PhotoEditor({ photos, onRetake, filterId = 'normal' }: P
                     const isF = favoriteFilters.includes(f.id);
                     const active = selectedFilter === f.id;
                     return (
-                      <button key={f.id} onClick={() => setSelectedFilter(f.id)} className={`flex flex-col items-center rounded-2xl border p-2 transition-all ${active ? 'border-blush-400 bg-white shadow-[0_8px_18px_-10px_rgba(242,86,143,0.8)]' : 'border-blush-100 bg-white/60 hover:bg-white'}`}>
+                      <button key={f.id} onClick={() => applyFilter(f.id)} className={`flex flex-col items-center rounded-2xl border p-2 transition-all ${active ? 'border-blush-400 bg-white shadow-[0_8px_18px_-10px_rgba(242,86,143,0.8)]' : 'border-blush-100 bg-white/60 hover:bg-white'}`}>
                         <div className="relative mb-1.5 w-full">
                           <div className="aspect-square w-full overflow-hidden rounded-xl">
                             {photos[0] ? (
                               // eslint-disable-next-line @next/next/no-img-element
-                              <img src={photos[0]} alt="" className="h-full w-full object-cover" style={{ filter: getFilterStyle(f.id) }} />
+                              <img src={photos[filterTarget === 'all' ? 0 : filterTarget] ?? photos[0]} alt="" className="h-full w-full object-cover" style={{ filter: getFilterStyle(f.id) }} />
                             ) : (
                               <div className="h-full w-full bg-gradient-to-br from-blush-300 via-champagne to-lilac" style={{ filter: getFilterStyle(f.id) }} />
                             )}
@@ -1055,13 +1110,13 @@ export default function PhotoEditor({ photos, onRetake, filterId = 'normal' }: P
             </div>
             <div className="min-h-0 flex-1 overflow-auto rounded-2xl bg-white/60 p-2">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={saved.url} alt="รูปของคุณ" className="mx-auto max-h-[52dvh] w-auto rounded-lg object-contain shadow-md" style={{ WebkitTouchCallout: 'default' }} />
+              <img src={platform.isIOS ? saved.dataUrl : saved.url} alt="รูปของคุณ" className="mx-auto max-h-[52dvh] w-auto rounded-lg object-contain shadow-md" style={{ WebkitTouchCallout: 'default' }} />
             </div>
             <p className="mt-3 px-1 text-center text-[11px] leading-relaxed text-plum-soft">
               {platform.isInApp
                 ? 'เบราว์เซอร์ในแอป (LINE / IG / Facebook) อาจบันทึกไม่ได้ — กดค้างที่รูปแล้วเลือก "บันทึก" หรือเปิดลิงก์นี้ใน Safari / Chrome'
                 : platform.isIOS
-                  ? 'แตะ "บันทึกลงรูปภาพ" แล้วเลือก "บันทึกภาพ" · หรือกดค้างที่รูปก็ได้'
+                  ? 'แตะ "บันทึกลงรูปภาพ" แล้วเลือก "บันทึกภาพ" · หรือกดค้างที่รูปแล้วเลือก "บันทึกรูปภาพ" (Safari / Chrome)'
                   : 'แตะ "ดาวน์โหลดรูป" เพื่อเก็บลงเครื่อง · หรือกดค้างที่รูปแล้วเลือก "ดาวน์โหลดรูปภาพ"'}
             </p>
             {saveNote && <p className="animate-pop mt-2 rounded-xl bg-blush-50 px-3 py-2 text-center text-xs font-medium text-blush-600">{saveNote}</p>}

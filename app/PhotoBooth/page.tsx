@@ -1,32 +1,29 @@
 'use client';
 
 import React, { useState } from 'react';
-import PhotoBooth from '@/app/screen/PhotoBoothScreen';
+import PhotoBooth, { type Shot } from '@/app/screen/PhotoBoothScreen';
 import PhotoEditor from '@/app/screen/PhotoEditor';
 
 export default function PhotoBoothPage() {
     const [isFinished, setIsFinished] = useState(false);
-    const [photos, setPhotos] = useState<string[]>([]);
-    const [currentFilterId, setCurrentFilterId] = useState<string>('normal');
+    const [shots, setShots] = useState<Shot[]>([]);
 
-    const handleFinish = (capturedPhotos: string[], filterId: string) => {
-        setPhotos(capturedPhotos);
-        setCurrentFilterId(filterId);
+    const handleFinish = (captured: Shot[]) => {
+        setShots(captured);
         setIsFinished(true);
     };
 
     const resetAll = () => {
-        setPhotos([]);
-        setCurrentFilterId('normal');
+        setShots([]);
         setIsFinished(false);
     };
 
     if (isFinished) {
         return (
             <PhotoEditor
-                photos={photos}
+                photos={shots.map(s => s.src)}
+                photoFilters={shots.map(s => s.filterId)}
                 onRetake={resetAll}
-                filterId={currentFilterId}
             />
         );
     }

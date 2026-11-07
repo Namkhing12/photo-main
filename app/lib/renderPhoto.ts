@@ -1,9 +1,8 @@
 // ───────────────────────────────────────────────────────────────
-// "อบ" รูปถ่ายก่อนจับภาพแถบรูป
-// ปัญหา: iOS (WebKit ทุกเบราว์เซอร์) และ Android บางรุ่น วาด <img> ที่มี CSS filter / transform
-// ภายใน SVG foreignObject (วิธีที่ html-to-image ใช้) ไม่ขึ้น → ไฟล์ที่ดาวน์โหลดได้ช่องรูปว่าง
-// วิธีแก้: วาดรูป + ครอปแบบ object-cover + ใส่ฟิลเตอร์ลง canvas เอง แล้วสลับ src ชั่วคราว
-// ให้ <img> เหลือแค่รูปธรรมดาไม่มี filter/transform จากนั้นค่อยคืนค่าเดิมหลังจับภาพเสร็จ
+// วาดรูปถ่ายลง canvas เอง (ไม่ผ่าน html-to-image)
+// ปัญหา: iOS (WebKit ทุกเบราว์เซอร์) และ Android บางรุ่น วาด <img> รูปถ่ายภายใน SVG foreignObject
+// (วิธีที่ html-to-image ใช้) ไม่ขึ้นเลย → ไฟล์ที่ดาวน์โหลดเหลือแต่กรอบ
+// วิธีแก้: ครอปแบบ object-cover + ใส่ฟิลเตอร์ลง canvas เองด้วย drawImage ซึ่งทำงานได้ทุกเบราว์เซอร์
 // ───────────────────────────────────────────────────────────────
 
 type Op = { fn: string; v: number };
@@ -114,65 +113,36 @@ const loadImage = (src: string) =>
   });
 
 /**
- * อบรูป `img.photo-item` ทุกใบใน node (ครอป object-cover + ฟิลเตอร์) ให้ขนาดพอดีกับที่จะส่งออก
- * คืนค่าฟังก์ชันสำหรับคืนสภาพเดิม
+ * วาดรูปถ่ายลง canvas เอง: ครอปแบบ object-cover ให้พอดีกล่อง boxW×boxH + ใส่ CSS filter
+ * ขนาดผลลัพธ์ = กล่อง × pixelRatio (ไม่เกินความละเอียดต้นฉบับ)
  */
-export const bakePhotos = async (node: HTMLElement, pixelRatio: number): Promise<() => void> => {
-  const imgs = Array.from(node.querySelectorAll<HTMLImageElement>('img.photo-item'));
-  const restores: (() => void)[] = [];
+export const renderPhoto = async (srcUrl: string, filter: string, boxW: number, boxH: number, pixelRatio: number): Promise<HTMLCanvasElement> => {
+  const src = await loadImage(srcUrl);
+  const nw = src.naturalWidth || 1;
+  const nh = src.naturalHeight || 1;
+  const boxRatio = boxW / boxH;
+  let sw = nw, sh = nh;
+  if (nw / nh > boxRatio) sw = nh * boxRatio; else sh = nw / boxRatio;
+  const sx = (nw - sw) / 2;
+  const sy = (nh - sh) / 2;
+  const scale = Math.min(1, (boxW * pixelRatio) / sw);
+  const ow = Math.max(1, Math.round(sw * scale));
+  const oh = Math.max(1, Math.round(sh * scale));
+
   const ctxFilterOk = supportsCtxFilter();
-
-  for (const el of imgs) {
-    const boxW = el.clientWidth;
-    const boxH = el.clientHeight;
-    if (!boxW || !boxH || !el.src) continue;
-    const filter = el.style.filter || 'none';
-
-    const src = await loadImage(el.src);
-    const nw = src.naturalWidth;
-    const nh = src.naturalHeight;
-    if (!nw || !nh) continue;
-
-    // object-cover: ครอปกลางให้สัดส่วนเท่ากล่อง
-    const boxRatio = boxW / boxH;
-    let sw = nw, sh = nh;
-    if (nw / nh > boxRatio) sw = nh * boxRatio; else sh = nw / boxRatio;
-    const sx = (nw - sw) / 2;
-    const sy = (nh - sh) / 2;
-
-    // ขนาดผลลัพธ์ = ขนาดที่จะออกในไฟล์จริง (ไม่เกินความละเอียดต้นฉบับ) → ไฟล์ SVG เล็กลง เบราว์เซอร์มือถือไม่ล่ม
-    const scale = Math.min(1, (boxW * pixelRatio) / sw);
-    const ow = Math.max(1, Math.round(sw * scale));
-    const oh = Math.max(1, Math.round(sh * scale));
-
-    const canvas = document.createElement('canvas');
-    canvas.width = ow;
-    canvas.height = oh;
-    const ctx = canvas.getContext('2d', { willReadFrequently: !ctxFilterOk });
-    if (!ctx) continue;
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
-
-    const ops = parseFilter(filter);
-    if (ctxFilterOk && ops.length) {
-      // ขยายค่า blur ตามสัดส่วนการย่อ/ขยาย
-      ctx.filter = filter.replace(/blur\(\s*([\d.]+)px\s*\)/g, (_, px) => `blur(${parseFloat(px) * (ow / boxW)}px)`);
-    }
-    ctx.drawImage(src, sx, sy, sw, sh, 0, 0, ow, oh);
-    if (!ctxFilterOk && ops.length) applyOpsManually(ctx, ow, oh, ops);
-
-    const baked = canvas.toDataURL('image/jpeg', 0.92);
-    const prev = { src: el.getAttribute('src') || '', filter: el.style.filter, transform: el.style.transform };
-    el.style.filter = 'none';
-    el.style.transform = 'none';
-    el.src = baked;
-    try { await el.decode(); } catch { /* ignore */ }
-    restores.push(() => {
-      el.src = prev.src;
-      el.style.filter = prev.filter;
-      el.style.transform = prev.transform;
-    });
+  const canvas = document.createElement('canvas');
+  canvas.width = ow;
+  canvas.height = oh;
+  const ctx = canvas.getContext('2d', { willReadFrequently: !ctxFilterOk });
+  if (!ctx) throw new Error('Canvas context not available');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  const ops = parseFilter(filter);
+  if (ctxFilterOk && ops.length) {
+    // ขยายค่า blur ตามสัดส่วนการย่อ/ขยาย
+    ctx.filter = filter.replace(/blur\(\s*([\d.]+)px\s*\)/g, (_, px) => `blur(${parseFloat(px) * (ow / boxW)}px)`);
   }
-
-  return () => restores.forEach(r => r());
+  ctx.drawImage(src, sx, sy, sw, sh, 0, 0, ow, oh);
+  if (!ctxFilterOk && ops.length) applyOpsManually(ctx, ow, oh, ops);
+  return canvas;
 };
