@@ -310,7 +310,7 @@ body {
   from { width: 100%; }
   to { width: 0%; }
 }
-.animate-review { animation: review-bar 3s linear forwards; }
+.animate-review { animation: review-bar 1s linear forwards; }
 
 @keyframes flash {
   0% { opacity: 0.95; }

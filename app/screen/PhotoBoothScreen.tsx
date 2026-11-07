@@ -58,7 +58,7 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
   const [cameraKey, setCameraKey] = useState(0); // เปลี่ยนค่าเพื่อ remount กล้อง (ลองใหม่)
   const [showGrid, setShowGrid] = useState(false);
   const [flashKey, setFlashKey] = useState(0);
-  const [reviewShot, setReviewShot] = useState<Shot | null>(null); // ค้างภาพที่เพิ่งถ่าย 3 วินาที
+  const [reviewShot, setReviewShot] = useState<Shot | null>(null); // ค้างภาพที่เพิ่งถ่าย 1 วินาที
   const [filterGroup, setFilterGroup] = useState<FilterGroup | 'all' | 'fav'>('all');
   const [filtersOpen, setFiltersOpen] = useState(false); // มือถือ: แถบฟิลเตอร์พับเก็บได้ (PC แสดงตลอด)
   // Zoom State (Digital Zoom)
@@ -142,10 +142,10 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
         // ไม่ให้เกินจำนวนช่องของเฟรม
         const newShot: Shot = { src: shot, filterId: selectedFilter };
         setPhotos(prev => (prev.length >= maxCount ? prev : [...prev, newShot]));
-        // ค้างภาพที่ถ่ายไว้บนจอกล้อง 3 วินาที ให้ดูผลก่อนถ่ายรูปต่อไป
+        // ค้างภาพที่ถ่ายไว้บนจอกล้อง 1 วินาที ให้ดูผลก่อนถ่ายรูปต่อไป
         setReviewShot(newShot);
         if (reviewRef.current) clearTimeout(reviewRef.current);
-        reviewRef.current = setTimeout(() => { reviewRef.current = null; setReviewShot(null); }, 3000);
+        reviewRef.current = setTimeout(() => { reviewRef.current = null; setReviewShot(null); }, 1000);
       } finally {
         isCapturingRef.current = false;
         setCountDown(null);
@@ -446,7 +446,7 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
                     </div>
                   )}
 
-                  {/* ค้างภาพที่เพิ่งถ่าย 3 วินาที (แตะเพื่อข้าม) */}
+                  {/* ค้างภาพที่เพิ่งถ่าย 1 วินาที (แตะเพื่อข้าม) */}
                   {reviewShot && (
                     <button
                       type="button"
