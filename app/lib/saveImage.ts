@@ -1,4 +1,5 @@
 import { toBlob } from 'html-to-image';
+import { bakePhotos } from './bakePhotos';
 
 // ───────────────────────────────────────────────────────────────
 // จับภาพแถบรูป + บันทึกให้เหมาะกับแต่ละแพลตฟอร์ม
@@ -32,7 +33,8 @@ export const detectPlatform = (): Platform => {
 const pickPixelRatio = (node: HTMLElement, p: Platform) => {
   const w = node.offsetWidth || 1;
   const h = node.offsetHeight || 1;
-  const maxArea = p.isIOS || p.isSafari ? 14_000_000 : 28_000_000;
+  // iOS ~16.7M px / Android รุ่นเล็กหน่วยความจำน้อย → จำกัดต่ำกว่า PC
+  const maxArea = p.isIOS || p.isSafari ? 12_000_000 : p.isMobile ? 16_000_000 : 28_000_000;
   return Math.max(1, Math.min(3, Math.sqrt(maxArea / (w * h))));
 };
 
@@ -43,20 +45,28 @@ export const captureNode = async (node: HTMLElement): Promise<Blob> => {
   // ใช้สีพื้นจริงของ node แทน (ถ้าโปร่งใสค่อยใช้ขาว)
   const bg = getComputedStyle(node).backgroundColor;
   const isTransparent = !bg || bg === 'transparent' || /rgba\(.*,\s*0\)$/.test(bg);
+  const pixelRatio = pickPixelRatio(node, p);
   const options = {
-    pixelRatio: pickPixelRatio(node, p),
+    pixelRatio,
     backgroundColor: isTransparent ? '#ffffff' : bg,
     // ตัดมุมโค้ง/เงา/การเลื่อนของอนิเมชันพิมพ์ ออกจากไฟล์
     style: { margin: '0', boxShadow: 'none', transform: 'none', borderRadius: '0' },
     filter: (n: HTMLElement | SVGElement) => !(n instanceof HTMLElement && n.dataset.html2canvasIgnore === 'true'),
   };
-  // WebKit (Safari / ทุกเบราว์เซอร์บน iOS) มักวาดรูปไม่ครบในรอบแรก → อุ่นเครื่องหนึ่งรอบก่อน
-  if (p.isIOS || p.isSafari) {
-    try { await toBlob(node, { ...options, pixelRatio: 1 }); } catch { /* ignore warm-up errors */ }
+  // อบฟิลเตอร์ลงรูปถ่ายก่อน — iOS / Android บางรุ่นวาดรูปที่มี CSS filter ใน foreignObject ไม่ขึ้น
+  const restore = await bakePhotos(node, pixelRatio);
+  try {
+    // WebKit และ Android บางรุ่นถอดรหัสรูปใน SVG ไม่ทันในรอบแรก → อุ่นเครื่องก่อน (iOS 2 รอบ)
+    const warmups = p.isIOS || p.isSafari ? 2 : p.isMobile ? 1 : 0;
+    for (let i = 0; i < warmups; i++) {
+      try { await toBlob(node, { ...options, pixelRatio: 1 }); } catch { /* ignore warm-up errors */ }
+    }
+    const blob = await toBlob(node, options);
+    if (!blob) throw new Error('สร้างรูปไม่สำเร็จ');
+    return blob;
+  } finally {
+    restore();
   }
-  const blob = await toBlob(node, options);
-  if (!blob) throw new Error('สร้างรูปไม่สำเร็จ');
-  return blob;
 };
 
 export const canShareFile = (file: File) => {

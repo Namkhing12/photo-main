@@ -56,6 +56,7 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
   const [cameraKey, setCameraKey] = useState(0); // เปลี่ยนค่าเพื่อ remount กล้อง (ลองใหม่)
   const [showGrid, setShowGrid] = useState(false);
   const [flashKey, setFlashKey] = useState(0);
+  const [reviewShot, setReviewShot] = useState<string | null>(null); // ค้างภาพที่เพิ่งถ่าย 3 วินาที
   const [filterGroup, setFilterGroup] = useState<FilterGroup | 'all' | 'fav'>('all');
   const [filtersOpen, setFiltersOpen] = useState(false); // มือถือ: แถบฟิลเตอร์พับเก็บได้ (PC แสดงตลอด)
   // Zoom State (Digital Zoom)
@@ -104,20 +105,27 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
   // เก็บ interval ไว้เพื่อยกเลิกเมื่อ unmount / เปลี่ยนเฟรม / รีเซ็ต
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const cheeseRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reviewRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isCapturingRef = useRef(false);
+  const endReview = useCallback(() => {
+    if (reviewRef.current) { clearTimeout(reviewRef.current); reviewRef.current = null; }
+    setReviewShot(null);
+  }, []);
   const stopCountdown = useCallback(() => {
     if (countdownRef.current) { clearInterval(countdownRef.current); countdownRef.current = null; }
     if (cheeseRef.current) { clearTimeout(cheeseRef.current); cheeseRef.current = null; }
+    endReview();
     isCapturingRef.current = false;
     setCountDown(null);
-  }, []);
+  }, [endReview]);
   useEffect(() => () => {
     if (countdownRef.current) clearInterval(countdownRef.current);
     if (cheeseRef.current) clearTimeout(cheeseRef.current);
+    if (reviewRef.current) clearTimeout(reviewRef.current);
   }, []);
 
   const startCapture = useCallback(() => {
-    if (isCapturingRef.current) return; // กันกดซ้ำระหว่างนับถอยหลัง/ประมวลผล
+    if (isCapturingRef.current || reviewRef.current) return; // กันกดซ้ำระหว่างนับถอยหลัง/ประมวลผล/ค้างภาพ
     isCapturingRef.current = true;
     setShowFrameMenu(false); setShowTimerMenu(false);
     const maxCount = selectedFrame.count;
@@ -131,6 +139,10 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
         setFlashKey(k => k + 1); // เอฟเฟกต์แฟลช
         // ไม่ให้เกินจำนวนช่องของเฟรม
         setPhotos(prev => (prev.length >= maxCount ? prev : [...prev, shot]));
+        // ค้างภาพที่ถ่ายไว้บนจอกล้อง 3 วินาที ให้ดูผลก่อนถ่ายรูปต่อไป
+        setReviewShot(shot);
+        if (reviewRef.current) clearTimeout(reviewRef.current);
+        reviewRef.current = setTimeout(() => { reviewRef.current = null; setReviewShot(null); }, 3000);
       } finally {
         isCapturingRef.current = false;
         setCountDown(null);
@@ -151,7 +163,7 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
   }, [timerSetting, zoom, selectedFrame.count, facingMode]);
 
   const resetAll = () => { stopCountdown(); setPhotos([]); setZoom(1); };
-  const deletePhoto = (indexToDelete: number) => { setPhotos(prev => prev.filter((_, index) => index !== indexToDelete)); };
+  const deletePhoto = (indexToDelete: number) => { endReview(); setPhotos(prev => prev.filter((_, index) => index !== indexToDelete)); };
   const handleUploadClick = () => fileInputRef.current?.click();
   // Utility to resize image
   const resizeImage = (file: File, maxWidth: number, maxHeight: number): Promise<string> => {
@@ -211,7 +223,9 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
     }
   };
 
-  const activeFilterClass = filters.find(f => f.id === selectedFilter)?.class || '';
+  // ใช้ค่า CSS filter ชุดเดียวกับหน้าแต่งรูป/ไฟล์ดาวน์โหลด (ลำดับตามที่กำหนดในฟิลเตอร์)
+  // ห้ามใช้ Tailwind class: Tailwind v4 เรียงลำดับฟังก์ชันใหม่เอง (เช่น hue-rotate ก่อน sepia) ทำให้สีก่อน/หลังถ่ายไม่ตรงกัน
+  const activeFilterStyle = getFilterStyle(selectedFilter);
   const isComplete = photos.length >= selectedFrame.count;
   const closeMenus = () => { setShowFrameMenu(false); setShowTimerMenu(false); };
   const activeFilterName = filters.find(f => f.id === selectedFilter)?.name ?? '';
@@ -337,8 +351,8 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
                       width: { ideal: 1920 },
                       height: { ideal: 1440 }
                     }}
-                    style={{ transform: `scale(${zoom})`, transformOrigin: 'center center' }}
-                    className={`absolute inset-0 h-full w-full object-cover transition-[transform,opacity] duration-300 ease-out ${cameraStatus === 'ready' ? 'opacity-100' : 'opacity-0'} ${activeFilterClass}`}
+                    style={{ transform: `scale(${zoom})`, transformOrigin: 'center center', filter: activeFilterStyle }}
+                    className={`absolute inset-0 h-full w-full object-cover transition-[transform,opacity] duration-300 ease-out ${cameraStatus === 'ready' ? 'opacity-100' : 'opacity-0'}`}
                   />
 
                   {/* Loading / error states */}
@@ -370,9 +384,6 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
 
                   {cameraStatus === 'ready' && (
                     <>
-                      {/* soft pink glow vignette (display only) */}
-                      <div className="pointer-events-none absolute inset-0 z-10 shadow-[inset_0_0_70px_rgba(255,126,170,0.28)]" aria-hidden />
-
                       {/* Rule-of-thirds grid */}
                       {showGrid && (
                         <div className="pointer-events-none absolute inset-0 z-10 grid grid-cols-3 grid-rows-3" aria-hidden>
@@ -390,10 +401,7 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
                         <span className="absolute bottom-0 right-0 h-6 w-6 rounded-br-xl border-b-2 border-r-2 border-white/80" />
                       </div>
 
-                      {/* Live badge + filter name */}
-                      <div className="absolute left-3 top-3 z-20 flex items-center gap-1.5 rounded-full bg-black/20 px-2.5 py-1 text-[10px] font-semibold tracking-[0.18em] text-white backdrop-blur-md">
-                        <span className="h-1.5 w-1.5 rounded-full bg-blush-400 animate-twinkle" /> LIVE
-                      </div>
+                      {/* filter name */}
                       <div key={selectedFilter} className="animate-pop absolute left-1/2 top-3 z-20 -translate-x-1/2 whitespace-nowrap rounded-full bg-white/85 px-3 py-1 text-[11px] font-semibold text-blush-600 shadow-sm backdrop-blur-md">
                         {activeFilterName}
                       </div>
@@ -435,8 +443,27 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
                     </div>
                   )}
 
+                  {/* ค้างภาพที่เพิ่งถ่าย 3 วินาที (แตะเพื่อข้าม) */}
+                  {reviewShot && (
+                    <button
+                      type="button"
+                      onClick={endReview}
+                      aria-label="ปิดภาพที่เพิ่งถ่าย"
+                      className="absolute inset-0 z-30 block h-full w-full cursor-pointer"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={reviewShot} alt="ภาพที่เพิ่งถ่าย" className="h-full w-full object-cover" style={{ filter: activeFilterStyle }} />
+                      <span className="absolute left-1/2 top-3 -translate-x-1/2 whitespace-nowrap rounded-full bg-white/90 px-3 py-1 text-[11px] font-semibold text-blush-600 shadow-sm">
+                        ✓ รูปที่ {photos.length}/{selectedFrame.count}
+                      </span>
+                      <span className="absolute inset-x-6 bottom-5 h-1.5 overflow-hidden rounded-full bg-white/40">
+                        <span key={reviewShot.length + photos.length} className="animate-review block h-full rounded-full bg-white" />
+                      </span>
+                    </button>
+                  )}
+
                   {/* Shutter — อยู่ในกล้อง */}
-                  {cameraStatus === 'ready' && !isComplete && countDown === null && (
+                  {cameraStatus === 'ready' && !isComplete && countDown === null && !reviewShot && (
                     <button
                       onClick={startCapture}
                       aria-label="ถ่ายรูป"
@@ -586,7 +613,7 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
                     {photo ? (
                       <>
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={photo} alt={`รูปที่ ${i + 1}`} className={`h-full w-full rounded-xl object-cover ${activeFilterClass}`} />
+                        <img src={photo} alt={`รูปที่ ${i + 1}`} className="h-full w-full rounded-xl object-cover" style={{ filter: activeFilterStyle }} />
                         <button
                           onClick={() => deletePhoto(i)}
                           aria-label={`ลบรูปที่ ${i + 1}`}
