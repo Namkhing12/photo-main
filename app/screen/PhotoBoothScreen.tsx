@@ -6,7 +6,7 @@ import {
   Camera, ChevronDown, ImagePlus, Timer,
   RefreshCw, ArrowRight, Trash2, SwitchCamera,
   ZoomIn, ZoomOut, Star, RotateCcw, Grid3x3, CameraOff, Loader2,
-  Shuffle
+  Shuffle, Sparkles
 } from 'lucide-react';
 import { filters, filterGroups, getFilterStyle, posePrompts, type FilterGroup } from '../lib/constants';
 import Confetti from '../src/Confetti';
@@ -57,6 +57,7 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
   const [showGrid, setShowGrid] = useState(false);
   const [flashKey, setFlashKey] = useState(0);
   const [filterGroup, setFilterGroup] = useState<FilterGroup | 'all' | 'fav'>('all');
+  const [filtersOpen, setFiltersOpen] = useState(false); // มือถือ: แถบฟิลเตอร์พับเก็บได้ (PC แสดงตลอด)
   const [poseIndex, setPoseIndex] = useState(0);
   const shufflePose = useCallback(() => {
     setPoseIndex(prev => {
@@ -250,18 +251,18 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
 
       <div className="relative z-10 mx-auto w-full max-w-6xl px-3 py-5 sm:px-6 md:py-8">
         {/* Hero */}
-        <header className="mb-5 text-center md:mb-8">
-          <p className="eyebrow mb-2">✦ Photo Booth · Vol. 01 ✦</p>
-          <h1 className="font-display text-4xl leading-[1.05] text-plum sm:text-5xl md:text-6xl">
+        <header className="mb-3 text-center md:mb-8">
+          <p className="eyebrow mb-2 hidden sm:block">✦ Photo Booth · Vol. 01 ✦</p>
+          <h1 className="font-display text-3xl leading-[1.05] text-plum sm:text-5xl md:text-6xl">
             say cheese, <span className="italic text-shimmer">babe</span>
             <span className="ml-2 inline-block animate-float">🎀</span>
           </h1>
-          <p className="mt-2 text-sm text-plum-soft md:text-base">ถ่ายรูปสวย ๆ แต่งให้ฉ่ำ แล้วเก็บไว้เป็นความทรงจำ</p>
+          <p className="mt-2 hidden text-sm text-plum-soft sm:block md:text-base">ถ่ายรูปสวย ๆ แต่งให้ฉ่ำ แล้วเก็บไว้เป็นความทรงจำ</p>
         </header>
 
-        <div className="flex flex-col items-start gap-5 md:flex-row md:gap-6" onClick={(e) => e.stopPropagation()}>
+        <div className="flex flex-col items-start gap-3 md:flex-row md:gap-6" onClick={(e) => e.stopPropagation()}>
           {/* ───── Studio card ───── */}
-          <section className="glass w-full flex-1 rounded-[2rem] p-3 sm:p-5 md:rounded-[2.5rem] md:p-7">
+          <section className="glass flex w-full flex-1 flex-col rounded-[2rem] p-3 sm:p-5 md:block md:rounded-[2.5rem] md:p-7">
             {/* Controls */}
             <div className="relative z-40 mb-4 flex flex-wrap items-center justify-center gap-2">
               <div className="relative">
@@ -324,7 +325,7 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
             </div>
 
             {/* Camera — polaroid-style body */}
-            <div className="relative mx-auto w-full max-w-[440px]">
+            <div className="relative mx-auto w-full max-w-[max(200px,min(300px,calc((100dvh_-_390px)*0.75)))] sm:max-w-[380px] md:max-w-[440px]">
               {/* stickers */}
               <span className="pointer-events-none absolute -left-4 -top-5 z-50 -rotate-12 text-4xl drop-shadow-md animate-float" aria-hidden>🎀</span>
               <span className="pointer-events-none absolute -right-3 top-1/3 z-50 text-2xl text-rosegold animate-twinkle" aria-hidden>✦</span>
@@ -502,8 +503,23 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
               </div>
             </div>
 
-            {/* Filters */}
-            <div className="mx-auto mt-6 w-full max-w-[520px]">
+            {/* Filters — มือถือ: พับเก็บได้ และอยู่ใต้ปุ่มชัตเตอร์ */}
+            <div className="order-3 mx-auto mt-3 w-full max-w-[520px] md:order-none md:mt-6">
+              <button
+                onClick={() => setFiltersOpen(o => !o)}
+                aria-expanded={filtersOpen}
+                className="chip w-full justify-between px-4 py-2.5 text-sm md:hidden"
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  <Sparkles size={15} className="shrink-0" /> ฟิลเตอร์
+                  <span className="truncate font-semibold text-blush-600">{activeFilterName}</span>
+                </span>
+                <span className="flex shrink-0 items-center gap-1 text-[11px]">
+                  {filtersOpen ? 'พับเก็บ' : 'เลือก'}
+                  <ChevronDown size={16} className={`transition-transform ${filtersOpen ? 'rotate-180' : ''}`} />
+                </span>
+              </button>
+              <div className={filtersOpen ? 'animate-rise mt-3 md:mt-0' : 'hidden md:block'}>
               <div className="mb-2 flex items-center justify-between px-1">
                 <p className="eyebrow">filter mood</p>
                 <p className="text-[10px] text-plum-soft">แตะ ☆ เพื่อปักหมุด</p>
@@ -553,20 +569,21 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
                   );
                 })}
               </div>
+              </div>
             </div>
 
             {/* Actions */}
-            <div className="mt-5 flex flex-col items-center gap-3">
+            <div className="order-2 mt-4 flex flex-col items-center gap-2 md:order-none md:mt-5 md:gap-3">
               {!isComplete ? (
                 <>
                   <button
                     onClick={startCapture}
                     disabled={countDown !== null}
                     aria-label="ถ่ายรูป"
-                    className="group relative grid h-20 w-20 place-items-center rounded-full bg-white shadow-[0_18px_40px_-14px_rgba(242,86,143,0.7)] transition-transform hover:scale-105 active:scale-95 disabled:opacity-60"
+                    className="group relative grid h-[68px] w-[68px] place-items-center rounded-full bg-white md:h-20 md:w-20 shadow-[0_18px_40px_-14px_rgba(242,86,143,0.7)] transition-transform hover:scale-105 active:scale-95 disabled:opacity-60"
                   >
                     <span className="absolute inset-0 rounded-full border-[3px] border-blush-200" />
-                    <span className="btn-candy h-[62px] w-[62px] !gap-0">
+                    <span className="btn-candy h-[52px] w-[52px] !gap-0 md:h-[62px] md:w-[62px]">
                       <Camera className="relative z-10 h-6 w-6" />
                     </span>
                   </button>
@@ -604,7 +621,7 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
                 return (
                   <div
                     key={i}
-                    className={`group relative aspect-[3/4] w-20 shrink-0 overflow-hidden rounded-2xl md:w-full ${photo ? 'animate-pop bg-white p-1 shadow-md shadow-blush-200' : 'border-2 border-dashed border-blush-200 bg-white/50'}`}
+                    className={`group relative aspect-[3/4] w-16 shrink-0 overflow-hidden sm:w-20 rounded-2xl md:w-full ${photo ? 'animate-pop bg-white p-1 shadow-md shadow-blush-200' : 'border-2 border-dashed border-blush-200 bg-white/50'}`}
                   >
                     {photo ? (
                       <>

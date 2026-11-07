@@ -17,7 +17,12 @@ const playfair = Playfair_Display({
   weight: ["500", "600", "700"],
 });
 
+// โดเมนจริงของเว็บ ใช้สร้างลิงก์รูปพรีวิวตอนแชร์ (opengraph-image.png)
+// เปลี่ยนชั่วคราวได้ด้วย NEXT_PUBLIC_SITE_URL
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://vercel.photos-cute.com";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
   title: "PhotoCute ✦ Photo Booth",
   description: "Capture and edit your cute photos",
 };

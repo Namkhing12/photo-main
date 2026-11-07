@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
-import { Download, Share2, RefreshCw, Ban, Type, Lock, Image as ImageIcon, Star, Sparkles, Palette, Smile, ArrowLeft, Pipette, Sticker, X, RotateCw, Copy, Trash2 } from 'lucide-react';
+import { Download, Share2, ChevronDown, RefreshCw, Ban, Type, Lock, Image as ImageIcon, Star, Sparkles, Palette, Smile, ArrowLeft, Pipette, Sticker, X, RotateCw, Copy, Trash2 } from 'lucide-react';
 import { getFilterStyle, filterGroups, type FilterGroup } from '../lib/constants';
 import { useFavoriteFilters } from '../lib/useFavoriteFilters';
 import { stickerArts, getStickerArt, STICKER_CUT_FILTER, stickerGroups, type StickerGroup } from '../lib/stickers';
@@ -332,6 +332,13 @@ export default function PhotoEditor({ photos, onRetake, filterId = 'normal' }: P
   const [emojiPlaceMode, setEmojiPlaceMode] = useState<'corner' | 'free'>('corner');
   const [stripWidth, setStripWidth] = useState(340);
   const [stickerGroup, setStickerGroup] = useState<StickerGroup | 'all'>('all');
+  // มือถือ: แผงเครื่องมือพับลงได้ (เริ่มแบบพับไว้ จะได้เห็นรูปเต็ม ๆ) — PC แสดงตลอด
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const onTabClick = (id: typeof activeTab) => {
+    if (id === activeTab && toolsOpen) { setToolsOpen(false); return; } // แตะแท็บเดิม = พับ
+    setActiveTab(id);
+    setToolsOpen(true);
+  };
   const [selectedPattern, setSelectedPattern] = useState<PatternId>('none');
   const [activeTheme, setActiveTheme] = useState<string | null>(null);
   const [currentMonth] = useState(() => new Date().getMonth());
@@ -694,16 +701,30 @@ export default function PhotoEditor({ photos, onRetake, filterId = 'normal' }: P
         </div>
 
         {/* ───── Tools panel ───── */}
-        <div className="glass relative z-30 flex h-[46vh] min-h-[340px] w-full shrink-0 flex-col overflow-hidden rounded-t-[2rem] md:h-full md:w-[400px] md:rounded-[2.25rem] lg:w-[420px]">
+        <div className={`glass relative z-30 flex w-full shrink-0 flex-col overflow-hidden rounded-t-[2rem] transition-[height] duration-300 md:h-full md:min-h-0 md:w-[400px] md:rounded-[2.25rem] lg:w-[420px] ${toolsOpen ? 'h-[52dvh] min-h-[300px]' : 'h-auto'}`}>
+
+          {/* Handle (มือถือ) — แตะเพื่อพับ/กาง */}
+          <button
+            onClick={() => setToolsOpen(o => !o)}
+            aria-expanded={toolsOpen}
+            aria-label={toolsOpen ? 'พับแผงเครื่องมือ' : 'เปิดแผงเครื่องมือ'}
+            className="flex w-full flex-col items-center gap-0.5 pt-2 md:hidden"
+          >
+            <span className="h-1.5 w-10 rounded-full bg-blush-200" />
+            <span className="flex items-center gap-1 text-[10px] font-semibold text-plum-soft">
+              {toolsOpen ? 'พับเก็บ' : 'แตะเพื่อแต่งรูป'}
+              <ChevronDown size={12} className={`transition-transform ${toolsOpen ? '' : 'rotate-180'}`} />
+            </span>
+          </button>
 
           {/* Tabs */}
-          <div className="p-3 md:p-4">
+          <div className="px-3 pb-2 pt-1.5 md:p-4">
             <div className="grid grid-cols-5 gap-1 rounded-[1.4rem] bg-blush-100/70 p-1 sm:rounded-full">
               {tabs.map(({ id, label, icon: Icon }) => (
                 <button
                   key={id}
-                  onClick={() => setActiveTab(id)}
-                  className={`flex flex-col items-center justify-center gap-0.5 rounded-[1.1rem] py-2 text-[10px] font-semibold transition-all sm:flex-row sm:gap-1.5 sm:rounded-full sm:py-2.5 sm:text-xs ${activeTab === id ? 'bg-white text-blush-600 shadow-[0_6px_16px_-8px_rgba(242,86,143,0.6)]' : 'text-plum-soft hover:text-blush-600'}`}
+                  onClick={() => onTabClick(id)}
+                  className={`flex flex-col items-center justify-center gap-0.5 rounded-[1.1rem] py-2 text-[10px] font-semibold transition-all sm:flex-row sm:gap-1.5 sm:rounded-full sm:py-2.5 sm:text-xs ${activeTab === id && toolsOpen ? 'bg-white text-blush-600 shadow-[0_6px_16px_-8px_rgba(242,86,143,0.6)]' : activeTab === id ? 'text-blush-600 md:bg-white md:shadow-[0_6px_16px_-8px_rgba(242,86,143,0.6)]' : 'text-plum-soft hover:text-blush-600'}`}
                 >
                   <Icon size={15} />
                   <span>{label}</span>
@@ -712,7 +733,7 @@ export default function PhotoEditor({ photos, onRetake, filterId = 'normal' }: P
             </div>
           </div>
 
-          <div className="custom-scrollbar flex-1 overflow-y-auto px-5 pb-6 md:px-6">
+          <div className={`custom-scrollbar min-h-0 flex-1 overflow-y-auto px-5 pb-6 md:block md:px-6 ${toolsOpen ? '' : 'hidden'}`}>
             {activeTab === 'frame' && (
               <div key="frame" className="animate-rise space-y-6">
                 <section>
@@ -1012,11 +1033,11 @@ export default function PhotoEditor({ photos, onRetake, filterId = 'normal' }: P
           </div>
 
           {/* Actions */}
-          <div className="flex gap-3 border-t border-white/70 bg-white/60 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] backdrop-blur-md md:p-5">
-            <button onClick={onRetake} disabled={loading} className="chip justify-center px-5 py-3.5 text-sm">
+          <div className="flex gap-3 border-t border-white/70 bg-white/60 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur-md md:p-5">
+            <button onClick={onRetake} disabled={loading} className="chip justify-center px-5 py-3 text-sm md:py-3.5">
               <RefreshCw size={16} /> <span className="hidden sm:inline">ถ่ายใหม่</span>
             </button>
-            <button onClick={handleDownload} disabled={loading} className="btn-candy flex-1 py-3.5 text-base">
+            <button onClick={handleDownload} disabled={loading} className="btn-candy flex-1 py-3 text-base md:py-3.5">
               {loading ? <RefreshCw className="relative z-10 animate-spin" size={18} /> : <Download className="relative z-10" size={18} />}
               <span className="relative z-10">{loading ? 'กำลังเซฟความน่ารัก...' : 'ดาวน์โหลดรูป'}</span>
             </button>
