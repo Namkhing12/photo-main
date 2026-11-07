@@ -38,10 +38,16 @@ const pickPixelRatio = (node: HTMLElement, p: Platform) => {
 
 export const captureNode = async (node: HTMLElement): Promise<Blob> => {
   const p = detectPlatform();
+  // ห้ามส่ง backgroundColor ของไลบรารี: html-to-image จะเอาไปเขียนทับ background-color ของแถบรูป
+  // ทำให้สีกรอบแบบสีทึบ (ดำ ชมพู ฟ้า ฯลฯ) กลายเป็นสีขาวในไฟล์ที่ดาวน์โหลด
+  // ใช้สีพื้นจริงของ node แทน (ถ้าโปร่งใสค่อยใช้ขาว)
+  const bg = getComputedStyle(node).backgroundColor;
+  const isTransparent = !bg || bg === 'transparent' || /rgba\(.*,\s*0\)$/.test(bg);
   const options = {
     pixelRatio: pickPixelRatio(node, p),
-    backgroundColor: '#ffffff',
-    style: { margin: '0', boxShadow: 'none', transform: 'none' },
+    backgroundColor: isTransparent ? '#ffffff' : bg,
+    // ตัดมุมโค้ง/เงา/การเลื่อนของอนิเมชันพิมพ์ ออกจากไฟล์
+    style: { margin: '0', boxShadow: 'none', transform: 'none', borderRadius: '0' },
     filter: (n: HTMLElement | SVGElement) => !(n instanceof HTMLElement && n.dataset.html2canvasIgnore === 'true'),
   };
   // WebKit (Safari / ทุกเบราว์เซอร์บน iOS) มักวาดรูปไม่ครบในรอบแรก → อุ่นเครื่องหนึ่งรอบก่อน
