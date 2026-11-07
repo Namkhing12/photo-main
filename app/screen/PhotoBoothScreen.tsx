@@ -1,17 +1,20 @@
 'use client';
 
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import Webcam from 'react-webcam';
 import {
-  Camera, ChevronDown, Upload, Sparkles,
-  RefreshCw, ArrowRight, X, Image as ImageIcon, Trash2, FlipHorizontal,
-  ZoomIn, ZoomOut, Star
+  Camera, ChevronDown, ImagePlus, Timer,
+  RefreshCw, ArrowRight, Trash2, SwitchCamera,
+  ZoomIn, ZoomOut, Star, RotateCcw, Grid3x3, CameraOff, Loader2,
+  Shuffle
 } from 'lucide-react';
-import { filters } from '../lib/constants';
+import { filters, filterGroups, getFilterStyle, posePrompts, type FilterGroup } from '../lib/constants';
+import Confetti from '../src/Confetti';
+import { useFavoriteFilters } from '../lib/useFavoriteFilters';
 
 // --- ส่วนประกอบไอคอนเฟรมคงเดิม (ย่อเพื่อประหยัดพื้นที่) ---
 const FrameIcon = ({ type }: { type: string }) => {
-  const baseClass = "border border-gray-400 bg-gray-100";
+  const baseClass = "border border-blush-400/80 bg-blush-100 rounded-[1px]";
   if (type === '2-v') return <div className="flex flex-col gap-[1px] w-3 h-5"><div className={`w-full h-1/2 ${baseClass}`}></div><div className={`w-full h-1/2 ${baseClass}`}></div></div>;
   if (type === '3-v') return <div className="flex flex-col gap-[1px] w-3 h-5"><div className={`w-full h-1/3 ${baseClass}`}></div><div className={`w-full h-1/3 ${baseClass}`}></div><div className={`w-full h-1/3 ${baseClass}`}></div></div>;
   if (type === '4-v') return <div className="flex flex-col gap-[1px] w-3 h-5"><div className={`w-full h-1/4 ${baseClass}`}></div><div className={`w-full h-1/4 ${baseClass}`}></div><div className={`w-full h-1/4 ${baseClass}`}></div><div className={`w-full h-1/4 ${baseClass}`}></div></div>;
@@ -44,11 +47,25 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
   const [selectedFrame, setSelectedFrame] = useState<FrameOption>(frameOptions[0]);
   const [selectedFilter, setSelectedFilter] = useState<string>('normal');
-  const [favoriteFilters, setFavoriteFilters] = useState<string[]>([]);
+  const { favoriteFilters, toggleFavorite, sortedFilters } = useFavoriteFilters();
   const [timerSetting, setTimerSetting] = useState<number>(0);
   const [countDown, setCountDown] = useState<number | null>(null);
   const [showFrameMenu, setShowFrameMenu] = useState(false);
   const [showTimerMenu, setShowTimerMenu] = useState(false);
+  const [cameraStatus, setCameraStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [cameraKey, setCameraKey] = useState(0); // เปลี่ยนค่าเพื่อ remount กล้อง (ลองใหม่)
+  const [showGrid, setShowGrid] = useState(false);
+  const [flashKey, setFlashKey] = useState(0);
+  const [filterGroup, setFilterGroup] = useState<FilterGroup | 'all' | 'fav'>('all');
+  const [poseIndex, setPoseIndex] = useState(0);
+  const shufflePose = useCallback(() => {
+    setPoseIndex(prev => {
+      let next = Math.floor(Math.random() * posePrompts.length);
+      if (next === prev) next = (next + 1) % posePrompts.length;
+      return next;
+    });
+  }, []);
+  const pose = posePrompts[poseIndex];
 
   // Zoom State (Digital Zoom)
   const [zoom, setZoom] = useState(1);
@@ -82,80 +99,78 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
         ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, w, h);
         resolve(canvas.toDataURL('image/jpeg', 1.0));
       };
+      img.onerror = () => resolve(imageSrc);
       img.src = imageSrc;
     });
   };
 
 
 
-  // Load Favorites from LocalStorage
-  React.useEffect(() => {
-    const saved = localStorage.getItem('favoriteFilters');
-    if (saved) {
-      try {
-        setFavoriteFilters(JSON.parse(saved));
-      } catch (e) {
-        console.error('Failed to parse favoriteFilters', e);
-      }
-    }
-  }, []);
-
-  // Save Favorites to LocalStorage
-  React.useEffect(() => {
-    localStorage.setItem('favoriteFilters', JSON.stringify(favoriteFilters));
-  }, [favoriteFilters]);
-
-  const toggleFavorite = (e: React.MouseEvent, filterId: string) => {
-    e.stopPropagation();
-    setFavoriteFilters(prev =>
-      prev.includes(filterId)
-        ? prev.filter(id => id !== filterId)
-        : [...prev, filterId]
-    );
-  };
-
-  const sortedFilters = React.useMemo(() => {
-    return [...filters].sort((a, b) => {
-      const aIsFav = favoriteFilters.includes(a.id);
-      const bIsFav = favoriteFilters.includes(b.id);
-      if (aIsFav && !bIsFav) return -1;
-      if (!aIsFav && bIsFav) return 1;
-      return 0; // Maintain original order among favorites and non-favorites
-    });
-  }, [favoriteFilters]);
-
   const handleZoomChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setZoom(parseFloat(e.target.value));
   };
 
-  const toggleCamera = useCallback(() => { setFacingMode(prev => (prev === 'user' ? 'environment' : 'user')); }, []);
+  const toggleCamera = useCallback(() => { setCameraStatus('loading'); setFacingMode(prev => (prev === 'user' ? 'environment' : 'user')); }, []);
+  const retryCamera = () => { setCameraStatus('loading'); setCameraKey(k => k + 1); };
+
+  // เก็บ interval ไว้เพื่อยกเลิกเมื่อ unmount / เปลี่ยนเฟรม / รีเซ็ต
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const cheeseRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isCapturingRef = useRef(false);
+  const stopCountdown = useCallback(() => {
+    if (countdownRef.current) { clearInterval(countdownRef.current); countdownRef.current = null; }
+    if (cheeseRef.current) { clearTimeout(cheeseRef.current); cheeseRef.current = null; }
+    isCapturingRef.current = false;
+    setCountDown(null);
+  }, []);
+  useEffect(() => () => {
+    if (countdownRef.current) clearInterval(countdownRef.current);
+    if (cheeseRef.current) clearTimeout(cheeseRef.current);
+  }, []);
 
   const startCapture = useCallback(() => {
+    if (isCapturingRef.current) return; // กันกดซ้ำระหว่างนับถอยหลัง/ประมวลผล
+    isCapturingRef.current = true;
     setShowFrameMenu(false); setShowTimerMenu(false);
+    const maxCount = selectedFrame.count;
     const takePhoto = async () => {
-      const imageSrc = webcamRef.current?.getScreenshot();
-      if (imageSrc) {
+      try {
+        const imageSrc = webcamRef.current?.getScreenshot();
+        if (!imageSrc) {
+          alert('ยังไม่พร้อมถ่ายภาพ: โปรดตรวจสอบว่ากล้องเปิดอยู่');
+          return;
+        }
+        setFlashKey(k => k + 1); // เอฟเฟกต์แฟลช
+        shufflePose(); // สุ่มท่าใหม่สำหรับช็อตถัดไป
         const croppedSrc = await cropImage(imageSrc, zoom);
-        setPhotos(prev => [...prev, croppedSrc]);
+        // ไม่ให้เกินจำนวนช่องของเฟรม
+        setPhotos(prev => (prev.length >= maxCount ? prev : [...prev, croppedSrc]));
+      } finally {
+        isCapturingRef.current = false;
+        setCountDown(null);
       }
-      setCountDown(null);
     };
     if (timerSetting === 0) { takePhoto(); return; }
     let time = timerSetting; setCountDown(time);
-    const interval = setInterval(() => {
+    countdownRef.current = setInterval(() => {
       time -= 1; setCountDown(time);
-      if (time === 0) { clearInterval(interval); takePhoto(); }
+      if (time <= 0) {
+        if (countdownRef.current) clearInterval(countdownRef.current);
+        countdownRef.current = null;
+        // โชว์ "ยิ้มมม~ 🧀" แป๊บนึงก่อนกดชัตเตอร์
+        cheeseRef.current = setTimeout(() => { cheeseRef.current = null; takePhoto(); }, 550);
+      }
     }, 1000);
-  }, [webcamRef, timerSetting, zoom]);
+  }, [timerSetting, zoom, selectedFrame.count, shufflePose]);
 
-  const resetAll = () => { setPhotos([]); setZoom(1); };
+  const resetAll = () => { stopCountdown(); setPhotos([]); setZoom(1); };
   const deletePhoto = (indexToDelete: number) => { setPhotos(prev => prev.filter((_, index) => index !== indexToDelete)); };
   const handleUploadClick = () => fileInputRef.current?.click();
   // Utility to resize image
   const resizeImage = (file: File, maxWidth: number, maxHeight: number): Promise<string> => {
     return new Promise((resolve, reject) => {
       const img = new Image();
-      img.src = URL.createObjectURL(file);
+      const objectUrl = URL.createObjectURL(file);
       img.onload = () => {
         let width = img.width;
         let height = img.height;
@@ -170,21 +185,29 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d');
+        URL.revokeObjectURL(objectUrl);
         if (ctx) {
           ctx.drawImage(img, 0, 0, width, height);
-          resolve(canvas.toDataURL(file.type));
+          // PNG คงความโปร่งใส ที่เหลือแปลงเป็น JPEG (รองรับทุกเบราว์เซอร์ เช่น HEIC/WebP/GIF)
+          resolve(file.type === 'image/png' ? canvas.toDataURL('image/png') : canvas.toDataURL('image/jpeg', 0.95));
         } else {
           reject(new Error('Canvas context not available'));
         }
-        URL.revokeObjectURL(img.src);
       };
-      img.onerror = (error) => reject(error);
+      img.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error('ไม่สามารถอ่านไฟล์รูปภาพได้')); };
+      img.src = objectUrl;
     });
   };
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
+    // รีเซ็ต input เพื่อให้เลือกไฟล์เดิมซ้ำได้
+    event.target.value = '';
     if (file) {
+      if (photos.length >= selectedFrame.count) {
+        alert(`เฟรมนี้ใส่ได้ ${selectedFrame.count} รูปแล้ว ลบรูปเดิมก่อนหากต้องการเพิ่มรูปใหม่`);
+        return;
+      }
       if (!file.type.startsWith('image/')) {
         alert("กรุณาเลือกไฟล์รูปภาพเท่านั้น");
         return;
@@ -193,7 +216,7 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
       try {
         // Resize image to max 1280x1280 to save memory and ensure html-to-image works
         const resizedImage = await resizeImage(file, 1280, 1280);
-        setPhotos(prev => [...prev, resizedImage]);
+        setPhotos(prev => (prev.length >= selectedFrame.count ? prev : [...prev, resizedImage]));
       } catch (error) {
         console.error("Error resizing image:", error);
         alert("เกิดข้อผิดพลาดในการโหลดรูปภาพ โปรดลองอีกครั้ง");
@@ -203,52 +226,61 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
 
   const activeFilterClass = filters.find(f => f.id === selectedFilter)?.class || '';
   const isComplete = photos.length >= selectedFrame.count;
+  const closeMenus = () => { setShowFrameMenu(false); setShowTimerMenu(false); };
+  const activeFilterName = filters.find(f => f.id === selectedFilter)?.name ?? '';
+  const visibleFilters = sortedFilters.filter(f =>
+    filterGroup === 'all' ? true
+      : filterGroup === 'fav' ? favoriteFilters.includes(f.id) || f.id === 'normal'
+        : f.group === filterGroup || f.id === 'normal'
+  );
+  const swatchPhoto = photos[photos.length - 1];
 
   return (
-    <div
-      className="w-full min-h-[100dvh] bg-[#FFF0F5] relative font-sans overflow-y-auto flex flex-col scroll-smooth"
-      onClick={() => { setShowFrameMenu(false); setShowTimerMenu(false); }}
-    >
-      {/* Background Decor */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-pink-300 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob"></div>
-        <div className="absolute top-[-10%] right-[-10%] w-[500px] h-[500px] bg-purple-300 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-2000"></div>
+    <div className="relative w-full min-h-full font-sans text-plum" onClick={closeMenus}>
+      {isComplete && <Confetti key={`${selectedFrame.id}-${photos.length}`} />}
+      {/* Aura */}
+      <div className="pointer-events-none fixed inset-0 overflow-hidden" aria-hidden>
+        <div className="absolute -left-24 -top-24 h-[420px] w-[420px] rounded-full bg-blush-300/40 blur-3xl animate-blob" />
+        <div className="absolute -right-24 top-10 h-[380px] w-[380px] rounded-full bg-lilac/70 blur-3xl animate-blob animation-delay-2000" />
+        <div className="absolute bottom-[-120px] left-1/3 h-[360px] w-[360px] rounded-full bg-champagne/70 blur-3xl animate-blob animation-delay-4000" />
+        <span className="absolute left-[8%] top-[22%] text-2xl text-blush-300 animate-twinkle">✦</span>
+        <span className="absolute right-[10%] top-[38%] text-xl text-rosegold animate-twinkle animation-delay-2000">✧</span>
+        <span className="absolute bottom-[14%] left-[14%] text-lg text-blush-400 animate-twinkle animation-delay-4000">✦</span>
       </div>
 
-      <div className="relative z-10 w-full flex-grow flex flex-col items-center justify-center p-2 sm:p-4 md:p-8">
-        <div
-          className="bg-white/60 backdrop-blur-xl rounded-[2rem] md:rounded-[3rem] shadow-2xl border border-white/50 p-4 sm:p-6 md:p-8 w-full max-w-5xl flex flex-col md:flex-row gap-6 md:gap-8 items-start justify-center"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* LEFT SIDE: Camera & Controls */}
-          <div className="flex-1 w-full flex flex-col items-center">
+      <div className="relative z-10 mx-auto w-full max-w-6xl px-3 py-5 sm:px-6 md:py-8">
+        {/* Hero */}
+        <header className="mb-5 text-center md:mb-8">
+          <p className="eyebrow mb-2">✦ Photo Booth · Vol. 01 ✦</p>
+          <h1 className="font-display text-4xl leading-[1.05] text-plum sm:text-5xl md:text-6xl">
+            say cheese, <span className="italic text-shimmer">babe</span>
+            <span className="ml-2 inline-block animate-float">🎀</span>
+          </h1>
+          <p className="mt-2 text-sm text-plum-soft md:text-base">ถ่ายรูปสวย ๆ แต่งให้ฉ่ำ แล้วเก็บไว้เป็นความทรงจำ</p>
+        </header>
 
-            <div className="md:hidden text-center mb-4">
-              <h1 className="text-3xl font-bold text-pink-500 flex items-center gap-2 justify-center">
-                Photo Booth
-              </h1>
-            </div>
-
-            {/* Top Bar Controls */}
-            <div className="flex flex-wrap gap-2 mb-4 justify-center w-full z-50">
+        <div className="flex flex-col items-start gap-5 md:flex-row md:gap-6" onClick={(e) => e.stopPropagation()}>
+          {/* ───── Studio card ───── */}
+          <section className="glass w-full flex-1 rounded-[2rem] p-3 sm:p-5 md:rounded-[2.5rem] md:p-7">
+            {/* Controls */}
+            <div className="relative z-40 mb-4 flex flex-wrap items-center justify-center gap-2">
               <div className="relative">
                 <button
                   onClick={(e) => { e.stopPropagation(); setShowFrameMenu(!showFrameMenu); setShowTimerMenu(false); }}
-                  className="flex items-center gap-2 bg-white px-4 py-3 rounded-xl border border-gray-200 text-gray-700 text-xs md:text-sm font-bold hover:border-pink-300 shadow-sm min-w-[110px] md:min-w-[130px] min-h-[44px] justify-between transition-all active:scale-95"
+                  className={`chip min-h-[44px] px-4 text-sm ${showFrameMenu ? '!border-blush-400 !text-blush-600 bg-white' : ''}`}
+                  aria-expanded={showFrameMenu}
                 >
-                  <div className="flex items-center gap-2">
-                    <FrameIcon type={selectedFrame.iconType} />
-                    <span>{selectedFrame.label}</span>
-                  </div>
+                  <FrameIcon type={selectedFrame.iconType} />
+                  <span>{selectedFrame.label}</span>
                   <ChevronDown size={14} className={`transition-transform ${showFrameMenu ? 'rotate-180' : ''}`} />
                 </button>
                 {showFrameMenu && (
-                  <div className="absolute top-full left-0 mt-2 w-[240px] md:w-[280px] bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden p-2 grid grid-cols-2 gap-1 z-50 animate-in fade-in zoom-in-95">
+                  <div className="glass animate-pop absolute left-0 top-full mt-2 grid w-[250px] grid-cols-2 gap-1 rounded-2xl p-2">
                     {frameOptions.map((option) => (
                       <button
                         key={option.id}
-                        onClick={() => { setSelectedFrame(option); setPhotos([]); setShowFrameMenu(false); }}
-                        className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs md:text-sm transition-colors text-left ${selectedFrame.id === option.id ? 'bg-gray-100 font-bold text-gray-900' : 'hover:bg-gray-50 text-gray-600'}`}
+                        onClick={() => { stopCountdown(); setSelectedFrame(option); setPhotos([]); setShowFrameMenu(false); }}
+                        className={`flex items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm transition-colors ${selectedFrame.id === option.id ? 'bg-blush-100 font-semibold text-blush-600' : 'text-plum-soft hover:bg-white'}`}
                       >
                         <FrameIcon type={option.iconType} />
                         <span>{option.label}</span>
@@ -261,20 +293,23 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
               <div className="relative">
                 <button
                   onClick={(e) => { e.stopPropagation(); setShowTimerMenu(!showTimerMenu); setShowFrameMenu(false); }}
-                  className="flex items-center gap-2 bg-white px-4 py-3 rounded-xl border border-gray-200 text-gray-700 text-xs md:text-sm font-bold hover:border-pink-300 shadow-sm min-w-[100px] md:min-w-[120px] min-h-[44px] justify-between transition-all active:scale-95"
+                  className={`chip min-h-[44px] px-4 text-sm ${showTimerMenu ? '!border-blush-400 !text-blush-600 bg-white' : ''}`}
+                  aria-expanded={showTimerMenu}
                 >
-                  <span>{timerSetting === 0 ? 'ไม่นับ' : `${timerSetting}s`}</span>
+                  <Timer size={16} />
+                  <span>{timerSetting === 0 ? 'ถ่ายทันที' : `${timerSetting} วิ`}</span>
                   <ChevronDown size={14} className={`transition-transform ${showTimerMenu ? 'rotate-180' : ''}`} />
                 </button>
                 {showTimerMenu && (
-                  <div className="absolute top-full left-0 mt-2 w-full bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden p-1 z-50">
+                  <div className="glass animate-pop absolute left-0 top-full mt-2 w-[150px] rounded-2xl p-1.5">
                     {timerOptions.map((time) => (
                       <button
                         key={time}
                         onClick={() => { setTimerSetting(time); setShowTimerMenu(false); }}
-                        className={`flex justify-between w-full px-3 py-2 text-xs md:text-sm rounded-lg ${timerSetting === time ? 'bg-pink-50 text-pink-500 font-bold' : 'hover:bg-gray-50 text-gray-600'}`}
+                        className={`flex w-full justify-between rounded-xl px-3 py-2.5 text-sm ${timerSetting === time ? 'bg-blush-100 font-semibold text-blush-600' : 'text-plum-soft hover:bg-white'}`}
                       >
-                        <span>{time === 0 ? 'ปิด' : `${time} วินาที`}</span>
+                        <span>{time === 0 ? 'ถ่ายทันที' : `${time} วินาที`}</span>
+                        {timerSetting === time && <span>✦</span>}
                       </button>
                     ))}
                   </div>
@@ -282,111 +317,238 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
               </div>
 
               <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
-              <button onClick={handleUploadClick} className="flex items-center gap-2 bg-white border border-pink-200 px-3 py-2 rounded-xl text-pink-500 text-xs md:text-sm font-bold hover:bg-pink-50 shadow-sm">
-                <Upload size={14} />
-                <span>เพิ่มรูป</span>
+              <button onClick={handleUploadClick} disabled={isComplete || countDown !== null} className="chip min-h-[44px] px-4 text-sm">
+                <ImagePlus size={16} />
+                <span>อัปโหลดรูป</span>
               </button>
             </div>
 
-            {/* Camera Area - PC: Balanced, Mobile: Viewport-fitting */}
-            <div className="relative w-full max-w-[420px] md:max-w-lg aspect-[3/4] bg-white rounded-[1.5rem] md:rounded-[2.5rem] p-2 md:p-6 shadow-2xl border border-gray-100 mb-4 sm:mb-6 flex items-center justify-center overflow-hidden">
-              <div className="relative w-full h-full rounded-[1rem] md:rounded-[1.8rem] overflow-hidden bg-black shadow-inner border border-gray-200/50">
-                <div className="w-full h-full overflow-hidden relative">
+            {/* Camera — polaroid-style body */}
+            <div className="relative mx-auto w-full max-w-[440px]">
+              {/* stickers */}
+              <span className="pointer-events-none absolute -left-4 -top-5 z-50 -rotate-12 text-4xl drop-shadow-md animate-float" aria-hidden>🎀</span>
+              <span className="pointer-events-none absolute -right-3 top-1/3 z-50 text-2xl text-rosegold animate-twinkle" aria-hidden>✦</span>
+              <span className="pointer-events-none absolute -bottom-3 -left-2 z-50 text-xl text-blush-400 animate-twinkle animation-delay-2000" aria-hidden>✧</span>
+
+              <div className="ring-luxe relative rounded-[2rem] bg-gradient-to-b from-white to-blush-50 p-2.5 pb-0 shadow-[0_40px_80px_-30px_rgba(217,58,118,0.6),0_10px_25px_-15px_rgba(74,31,54,0.3)] md:rounded-[2.4rem] md:p-3 md:pb-0">
+                <div className="relative aspect-[3/4] w-full overflow-hidden rounded-[1.5rem] bg-gradient-to-br from-blush-200 via-blush-100 to-lilac md:rounded-[1.9rem]">
                   <Webcam
+                    key={cameraKey}
                     audio={false}
+                    muted
+                    playsInline
                     ref={webcamRef}
                     screenshotFormat="image/jpeg"
                     screenshotQuality={1}
                     mirrored={facingMode === 'user'}
+                    onUserMedia={() => setCameraStatus('ready')}
                     onUserMediaError={(err) => {
                       console.error("Camera Error:", err);
-                      alert("ไม่สามารถเปิดกล้องได้: โปรดตรวจสอบการอนุญาตใช้งานกล้อง");
+                      setCameraStatus('error');
                     }}
                     videoConstraints={{
                       facingMode: facingMode,
-                      aspectRatio: { ideal: 0.75 }, // กลับมาเป็น 3:4 มาตรฐาน
+                      aspectRatio: { ideal: 0.75 },
                       width: { ideal: 1080 },
                       height: { ideal: 1440 }
                     }}
                     style={{ transform: `scale(${zoom})`, transformOrigin: 'center center' }}
-                    className={`absolute inset-0 w-full h-full object-cover transition-transform duration-100 ease-linear ${activeFilterClass}`}
+                    className={`absolute inset-0 h-full w-full object-cover transition-[transform,opacity] duration-300 ease-out ${cameraStatus === 'ready' ? 'opacity-100' : 'opacity-0'} ${activeFilterClass}`}
                   />
 
-                  {/* Simulated Emoji Frame Overlay */}
-                  <div className="absolute inset-0 pointer-events-none z-10 flex flex-col justify-between p-2 opacity-80">
-                    <div className="flex justify-center gap-1 sm:gap-4 text-xl sm:text-2xl drop-shadow-md">
+                  {/* Loading / error states */}
+                  {cameraStatus !== 'ready' && (
+                    <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 px-8 text-center">
+                      {cameraStatus === 'loading' ? (
+                        <>
+                          <span className="grid h-16 w-16 place-items-center rounded-full bg-white/70 text-blush-500 shadow-lg shadow-blush-200">
+                            <Loader2 size={26} className="animate-spin" />
+                          </span>
+                          <p className="font-display text-xl italic text-plum">getting ready…</p>
+                          <p className="text-xs text-plum-soft">กำลังเปิดกล้อง กดอนุญาตใช้กล้องได้เลยนะ</p>
+                        </>
+                      ) : (
+                        <>
+                          <span className="grid h-16 w-16 place-items-center rounded-full bg-white/70 text-blush-500 shadow-lg shadow-blush-200">
+                            <CameraOff size={26} />
+                          </span>
+                          <p className="font-display text-xl italic text-plum">oops, no camera</p>
+                          <p className="text-xs text-plum-soft">เปิดกล้องไม่ได้ ลองอนุญาตกล้องในเบราว์เซอร์ หรืออัปโหลดรูปแทนก็ได้</p>
+                          <div className="mt-1 flex gap-2">
+                            <button onClick={retryCamera} className="chip px-4 py-2 text-xs"><RefreshCw size={13} /> ลองใหม่</button>
+                            <button onClick={handleUploadClick} disabled={isComplete} className="btn-candy px-4 py-2 text-xs"><ImagePlus size={13} className="relative z-10" /><span className="relative z-10">อัปโหลด</span></button>
+                          </div>
+                        </>
+                      )}
                     </div>
-                    <div className="flex justify-between flex-1 items-center px-1">
-                      <div className="flex flex-col gap-4 text-xl sm:text-2xl drop-shadow-md">
+                  )}
+
+                  {cameraStatus === 'ready' && (
+                    <>
+                      {/* soft pink glow vignette (display only) */}
+                      <div className="pointer-events-none absolute inset-0 z-10 shadow-[inset_0_0_70px_rgba(255,126,170,0.28)]" aria-hidden />
+
+                      {/* Rule-of-thirds grid */}
+                      {showGrid && (
+                        <div className="pointer-events-none absolute inset-0 z-10 grid grid-cols-3 grid-rows-3" aria-hidden>
+                          {Array.from({ length: 9 }).map((_, i) => (
+                            <span key={i} className="border-[0.5px] border-white/35" />
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Viewfinder corners */}
+                      <div className="pointer-events-none absolute inset-4 z-10" aria-hidden>
+                        <span className="absolute left-0 top-0 h-6 w-6 rounded-tl-xl border-l-2 border-t-2 border-white/80" />
+                        <span className="absolute right-0 top-0 h-6 w-6 rounded-tr-xl border-r-2 border-t-2 border-white/80" />
+                        <span className="absolute bottom-0 left-0 h-6 w-6 rounded-bl-xl border-b-2 border-l-2 border-white/80" />
+                        <span className="absolute bottom-0 right-0 h-6 w-6 rounded-br-xl border-b-2 border-r-2 border-white/80" />
                       </div>
-                      <div className="flex flex-col gap-4 text-xl sm:text-2xl drop-shadow-md">
+
+                      {/* Live badge + filter name */}
+                      <div className="absolute left-3 top-3 z-20 flex items-center gap-1.5 rounded-full bg-black/20 px-2.5 py-1 text-[10px] font-semibold tracking-[0.18em] text-white backdrop-blur-md">
+                        <span className="h-1.5 w-1.5 rounded-full bg-blush-400 animate-twinkle" /> LIVE
                       </div>
-                    </div>
-                    <div className="flex justify-center gap-1 sm:gap-4 text-xl sm:text-2xl drop-shadow-md">
-                    </div>
+                      <div key={selectedFilter} className="animate-pop absolute left-1/2 top-3 z-20 -translate-x-1/2 whitespace-nowrap rounded-full bg-white/85 px-3 py-1 text-[11px] font-semibold text-blush-600 shadow-sm backdrop-blur-md">
+                        {activeFilterName}
+                      </div>
+                    </>
+                  )}
+
+                  {/* Top-right tools */}
+                  <div className="absolute right-3 top-3 z-40 flex flex-col gap-2">
+                    <button
+                      onClick={toggleCamera}
+                      aria-label="สลับกล้อง"
+                      className="grid h-9 w-9 place-items-center rounded-full border border-white/40 bg-black/20 text-white backdrop-blur-md transition-all hover:bg-blush-500 active:scale-90"
+                    >
+                      <SwitchCamera size={16} />
+                    </button>
+                    <button
+                      onClick={() => setShowGrid(g => !g)}
+                      aria-label="เส้นกริด"
+                      aria-pressed={showGrid}
+                      className={`grid h-9 w-9 place-items-center rounded-full border backdrop-blur-md transition-all active:scale-90 ${showGrid ? 'border-white bg-white text-blush-600' : 'border-white/40 bg-black/20 text-white hover:bg-blush-500'}`}
+                    >
+                      <Grid3x3 size={16} />
+                    </button>
                   </div>
+
+                  {/* Pose prompt */}
+                  {cameraStatus === 'ready' && !isComplete && countDown === null && (
+                    <div className="absolute bottom-3 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1 whitespace-nowrap rounded-full bg-white/90 py-1 pl-3 pr-1 text-xs font-semibold text-plum shadow-md backdrop-blur-md">
+                      <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-blush-400">pose</span>
+                      <span key={pose} className="animate-pop inline-block">{pose}</span>
+                      <button
+                        onClick={shufflePose}
+                        aria-label="สุ่มท่าโพสใหม่"
+                        className="ml-0.5 grid h-7 w-7 place-items-center rounded-full text-blush-500 transition-all hover:bg-blush-100 active:rotate-180"
+                      >
+                        <Shuffle size={13} />
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Countdown */}
+                  {countDown !== null && (
+                    <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-4 bg-plum/20 backdrop-blur-[2px]">
+                      {countDown > 0 ? (
+                        <>
+                          <span key={countDown} className="animate-boing grid h-36 w-36 place-items-center rounded-full bg-white/25 shadow-[0_0_0_10px_rgba(255,255,255,0.15)] backdrop-blur-sm md:h-44 md:w-44">
+                            <span className="font-display text-[6rem] italic leading-none text-white drop-shadow-[0_6px_30px_rgba(242,86,143,0.9)] md:text-[8rem]">{countDown}</span>
+                          </span>
+                          <span className="animate-wiggle rounded-full bg-white/90 px-4 py-1.5 text-sm font-semibold text-blush-600 shadow-lg">{pose}</span>
+                        </>
+                      ) : (
+                        <span className="animate-boing font-display whitespace-nowrap text-5xl italic text-white drop-shadow-[0_6px_30px_rgba(242,86,143,0.9)] md:text-6xl">ยิ้มมม~ 🧀</span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Flash */}
+                  {flashKey > 0 && <div key={flashKey} className="animate-flash pointer-events-none absolute inset-0 z-50 bg-white" aria-hidden />}
+
+                  {/* Zoom */}
+                  {cameraStatus === 'ready' && (
+                    <div className="absolute right-3 top-1/2 z-40 flex -translate-y-1/2 flex-col items-center gap-2 rounded-full border border-white/30 bg-black/15 px-1.5 py-3 backdrop-blur-md">
+                      <ZoomIn size={14} className="text-white" />
+                      <div className="relative flex h-24 w-2 items-center justify-center">
+                        <input
+                          type="range"
+                          min={minZoom}
+                          max={maxZoom}
+                          step={0.1}
+                          value={zoom}
+                          onChange={handleZoomChange}
+                          aria-label="ซูม"
+                          className="absolute h-1.5 w-24 origin-center -rotate-90 cursor-pointer appearance-none rounded-full bg-white/40 accent-blush-400 outline-none"
+                        />
+                      </div>
+                      <ZoomOut size={14} className="text-white" />
+                      <button onClick={() => setZoom(1)} className="text-[9px] font-semibold text-white" aria-label="รีเซ็ตซูม">{zoom.toFixed(1)}×</button>
+                    </div>
+                  )}
                 </div>
 
-                {/* Camera Toggle Button */}
-                <button
-                  onClick={toggleCamera}
-                  className="absolute top-3 right-3 bg-black/40 backdrop-blur-md text-white p-2.5 rounded-full hover:bg-pink-500 transition-all z-40 border border-white/20 active:scale-90"
-                >
-                  <RefreshCw size={18} className={facingMode === 'environment' ? 'rotate-180' : ''} />
-                </button>
-
-                {/* Countdown */}
-                {countDown !== null && countDown > 0 && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/20 backdrop-blur-sm z-30">
-                    <span className="text-8xl md:text-9xl font-bold text-white drop-shadow-lg animate-bounce">{countDown}</span>
+                {/* Polaroid chin */}
+                <div className="flex items-center justify-between px-2 py-3 md:py-3.5">
+                  <span className="font-display text-base italic text-plum">Photo<span className="text-blush-500">Cute</span> <span className="text-rosegold">✦</span> cam</span>
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: selectedFrame.count }).map((_, i) => (
+                      <span key={i} className={`h-1.5 rounded-full transition-all duration-300 ${i < photos.length ? 'w-4 bg-blush-500' : 'w-1.5 bg-blush-200'}`} />
+                    ))}
                   </div>
-                )}
-
-                {/* Zoom Control (Always Visible) */}
-                <div className="absolute right-4 top-1/2 -translate-y-1/2 flex flex-col items-center gap-2 z-40 bg-black/30 backdrop-blur-sm p-2 rounded-full py-4 group">
-                  <ZoomIn size={16} className="text-white/80 drop-shadow-md" />
-                  <div className="h-32 w-2 relative flex items-center justify-center">
-                    <input
-                      type="range"
-                      min={minZoom}
-                      max={maxZoom}
-                      step={0.1}
-                      value={zoom}
-                      onChange={handleZoomChange}
-                      className="absolute w-32 h-2 appearance-none bg-white/30 rounded-full outline-none -rotate-90 origin-center cursor-pointer accent-pink-500 hover:accent-pink-400"
-                    />
-                  </div>
-                  <ZoomOut size={16} className="text-white/80 drop-shadow-md" />
                 </div>
-              </div>
-
-              {/* Progress Dots */}
-              <div className="absolute bottom-6 md:bottom-10 left-0 right-0 flex justify-center gap-2 z-20">
-                {Array.from({ length: selectedFrame.count }).map((_, i) => (
-                  <div key={i} className={`w-2 h-2 md:w-2.5 md:h-2.5 rounded-full transition-all ${i < photos.length ? 'bg-pink-500 scale-125 shadow-md' : 'bg-white/60'}`}></div>
-                ))}
               </div>
             </div>
 
-            {/* Filters Slider */}
-            <div className="w-full max-w-[420px]">
-              <div className="flex gap-2 md:gap-3 overflow-x-auto pb-4 px-2 scrollbar-hide">
-                {sortedFilters.map((filter) => {
+            {/* Filters */}
+            <div className="mx-auto mt-6 w-full max-w-[520px]">
+              <div className="mb-2 flex items-center justify-between px-1">
+                <p className="eyebrow">filter mood</p>
+                <p className="text-[10px] text-plum-soft">แตะ ☆ เพื่อปักหมุด</p>
+              </div>
+              <div className="no-scrollbar -mx-1 mb-3 flex gap-1.5 overflow-x-auto px-1">
+                {[...(favoriteFilters.length > 0 ? [{ id: 'fav' as const, label: '⭐ ที่ชอบ' }] : []), ...filterGroups].map(g => (
+                  <button
+                    key={g.id}
+                    onClick={() => setFilterGroup(g.id)}
+                    className={`chip shrink-0 whitespace-nowrap px-3 py-1.5 text-[11px] ${filterGroup === g.id ? 'chip-active' : ''}`}
+                  >
+                    {g.label}
+                  </button>
+                ))}
+              </div>
+              <div className="no-scrollbar -mx-1 flex gap-3 overflow-x-auto px-1 pb-2 pt-1">
+                {visibleFilters.map((filter) => {
                   const isActive = selectedFilter === filter.id;
                   const isFav = favoriteFilters.includes(filter.id);
+                  const [emoji, ...rest] = filter.name.split(' ');
                   return (
                     <button
                       key={filter.id}
                       onClick={() => setSelectedFilter(filter.id)}
-                      className={`flex items-center gap-1.5 px-4 py-1.5 md:px-5 md:py-2 rounded-full text-xs md:text-sm font-bold whitespace-nowrap transition-all border ${isActive ? 'bg-pink-50 border-pink-400 text-pink-500' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+                      className="group flex w-[68px] shrink-0 flex-col items-center gap-1.5"
                     >
-                      <span
-                        onClick={(e) => toggleFavorite(e, filter.id)}
-                        className={`transition-colors ${isFav ? 'text-yellow-400' : 'text-gray-300 hover:text-yellow-200'}`}
-                      >
-                        <Star size={14} fill={isFav ? 'currentColor' : 'none'} />
+                      <span className={`relative block h-[60px] w-[60px] rounded-full p-[3px] transition-all ${isActive ? 'bg-gradient-to-br from-blush-400 via-rosegold to-blush-300 shadow-[0_8px_18px_-8px_rgba(242,86,143,0.8)]' : 'bg-white group-hover:bg-blush-200'}`}>
+                        <span className="block h-full w-full overflow-hidden rounded-full border-2 border-white">
+                          {swatchPhoto ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={swatchPhoto} alt="" className="h-full w-full object-cover" style={{ filter: getFilterStyle(filter.id) }} />
+                          ) : (
+                            <span className="grid h-full w-full place-items-center bg-gradient-to-br from-blush-300 via-champagne to-lilac text-xl" style={{ filter: getFilterStyle(filter.id) }}>{emoji}</span>
+                          )}
+                        </span>
+                        <span
+                          role="button"
+                          aria-label={isFav ? 'เลิกปักหมุด' : 'ปักหมุด'}
+                          onClick={(e) => toggleFavorite(e, filter.id)}
+                          className={`absolute -right-0.5 -top-0.5 grid h-5 w-5 place-items-center rounded-full bg-white shadow-sm transition-colors ${isFav ? 'text-amber-400' : 'text-blush-200 hover:text-amber-400'}`}
+                        >
+                          <Star size={10} fill={isFav ? 'currentColor' : 'none'} />
+                        </span>
                       </span>
-                      {filter.name}
+                      <span className={`w-full truncate text-center text-[10px] font-semibold ${isActive ? 'text-blush-600' : 'text-plum-soft'}`}>{rest.join(' ') || emoji}</span>
                     </button>
                   );
                 })}
@@ -394,60 +556,87 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
             </div>
 
             {/* Actions */}
-            <div className="mt-4 flex flex-col items-center gap-3 w-full">
+            <div className="mt-5 flex flex-col items-center gap-3">
               {!isComplete ? (
-                <button
-                  onClick={startCapture}
-                  disabled={countDown !== null}
-                  className="bg-gradient-to-r from-[#FF5C8D] to-[#FF8FAB] text-white text-base md:text-lg font-bold px-10 py-3.5 md:px-12 md:py-4 rounded-full shadow-lg shadow-pink-200 hover:scale-105 active:scale-95 transition-all flex items-center gap-3 disabled:opacity-70"
-                >
-                  <Camera className="w-5 h-5 md:w-6 md:h-6" />
-                  <span>{photos.length === 0 ? 'เริ่มจับภาพ' : `ถ่ายรูปที่ ${photos.length + 1}/${selectedFrame.count}`}</span>
-                </button>
-              ) : (
-                <div className="flex flex-col md:flex-row gap-3 md:gap-4 items-center w-full justify-center">
-                  <button onClick={() => deletePhoto(photos.length - 1)} className="bg-gray-100 text-gray-600 px-6 py-3 rounded-full text-sm font-bold hover:bg-gray-200 transition-all flex items-center gap-2 shadow-sm w-full md:w-auto justify-center">
-                    <RefreshCw size={16} /> ถ่ายใหม่
+                <>
+                  <button
+                    onClick={startCapture}
+                    disabled={countDown !== null}
+                    aria-label="ถ่ายรูป"
+                    className="group relative grid h-20 w-20 place-items-center rounded-full bg-white shadow-[0_18px_40px_-14px_rgba(242,86,143,0.7)] transition-transform hover:scale-105 active:scale-95 disabled:opacity-60"
+                  >
+                    <span className="absolute inset-0 rounded-full border-[3px] border-blush-200" />
+                    <span className="btn-candy h-[62px] w-[62px] !gap-0">
+                      <Camera className="relative z-10 h-6 w-6" />
+                    </span>
                   </button>
-                  <button onClick={() => onFinish?.(photos, selectedFilter)} className="bg-gradient-to-r from-[#FF5C8D] to-[#FF8FAB] text-white text-base md:text-lg font-bold px-10 py-3 rounded-full shadow-lg hover:scale-105 active:scale-95 transition-all flex items-center gap-3 animate-pulse w-full md:w-auto justify-center">
-                    <span>ต่อไป</span>
-                    <ArrowRight size={20} />
+                  <p className="text-sm font-medium text-plum-soft">
+                    {countDown !== null
+                      ? 'ยิ้มหวาน ๆ นะ ✦'
+                      : photos.length === 0
+                        ? 'แตะเพื่อเริ่มถ่าย'
+                        : <>รูปที่ <span className="font-semibold text-blush-600">{photos.length + 1}</span> / {selectedFrame.count}</>}
+                  </p>
+                </>
+              ) : (
+                <div className="flex w-full flex-col-reverse items-center justify-center gap-3 sm:flex-row">
+                  <button onClick={() => deletePhoto(photos.length - 1)} className="chip w-full justify-center px-6 py-3.5 text-sm sm:w-auto">
+                    <RefreshCw size={16} /> ถ่ายรูปสุดท้ายใหม่
+                  </button>
+                  <button onClick={() => onFinish?.(photos.slice(0, selectedFrame.count), selectedFilter)} className="btn-candy w-full px-9 py-3.5 text-base sm:w-auto">
+                    <span className="relative z-10">ไปแต่งรูปกันเลย</span>
+                    <ArrowRight size={18} className="relative z-10" />
                   </button>
                 </div>
               )}
             </div>
-          </div>
+          </section>
 
-          {/* RIGHT SIDE: Preview Strip */}
-          <div className="flex flex-row md:flex-col gap-4 w-full md:w-[140px] md:sticky md:top-8 h-auto md:h-[calc(100dvh-120px)] overflow-x-auto md:overflow-x-hidden md:overflow-y-auto pr-2 scrollbar-hide pb-4 md:pb-0">
-            <div className="text-gray-400 text-xs font-bold uppercase tracking-wider text-center mb-1 sticky top-0 left-0 bg-white/90 backdrop-blur-sm py-2 z-10 min-w-[80px] md:min-w-0">Previews</div>
-            <div className="flex flex-row md:flex-col gap-3">
+          {/* ───── Film strip ───── */}
+          <aside className="glass w-full rounded-[1.75rem] p-3 md:sticky md:top-24 md:w-[176px] md:rounded-[2rem] md:p-4">
+            <div className="mb-3 flex items-center justify-between px-1">
+              <p className="eyebrow">your shots</p>
+              <span className="text-[11px] font-semibold text-blush-600">{photos.length}/{selectedFrame.count}</span>
+            </div>
+            <div className="no-scrollbar flex flex-row gap-2.5 overflow-x-auto pb-1 md:max-h-[calc(100dvh-260px)] md:flex-col md:overflow-x-hidden md:overflow-y-auto">
               {Array.from({ length: selectedFrame.count }).map((_, i) => {
                 const photo = photos[i];
                 return (
-                  <div key={i} className="relative w-20 md:w-full aspect-[3/4] bg-gray-100 rounded-xl border-2 border-dashed border-gray-200 flex items-center justify-center overflow-hidden group flex-shrink-0">
+                  <div
+                    key={i}
+                    className={`group relative aspect-[3/4] w-20 shrink-0 overflow-hidden rounded-2xl md:w-full ${photo ? 'animate-pop bg-white p-1 shadow-md shadow-blush-200' : 'border-2 border-dashed border-blush-200 bg-white/50'}`}
+                  >
                     {photo ? (
                       <>
-                        <img src={photo} className={`w-full h-full object-cover ${activeFilterClass}`} />
-                        <button onClick={() => deletePhoto(i)} className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all text-white font-bold text-xs z-10">
-                          <Trash2 size={20} />
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={photo} alt={`รูปที่ ${i + 1}`} className={`h-full w-full rounded-xl object-cover ${activeFilterClass}`} />
+                        <button
+                          onClick={() => deletePhoto(i)}
+                          aria-label={`ลบรูปที่ ${i + 1}`}
+                          className="absolute right-1.5 top-1.5 grid h-7 w-7 place-items-center rounded-full bg-white/90 text-blush-600 shadow-sm transition-all hover:bg-blush-500 hover:text-white md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100"
+                        >
+                          <Trash2 size={13} />
                         </button>
                       </>
                     ) : (
-                      <span className="text-gray-300 font-bold text-xl">{i + 1}</span>
+                      <span className="font-display absolute inset-0 grid place-items-center text-2xl italic text-blush-300">{i + 1}</span>
                     )}
                   </div>
                 );
               })}
             </div>
             {photos.length > 0 && (
-              <button onClick={resetAll} className="text-gray-400 text-xs underline hover:text-red-400 transition-colors text-center pb-4">รีเซ็ตทั้งหมด</button>
+              <button onClick={resetAll} className="mx-auto mt-3 flex items-center gap-1.5 text-xs font-medium text-plum-soft transition-colors hover:text-blush-600">
+                <RotateCcw size={12} /> เริ่มใหม่ทั้งหมด
+              </button>
             )}
-          </div>
+          </aside>
         </div>
 
-        <div className="mt-6 md:mt-8 text-pink-300/80 text-[10px] md:text-xs font-medium text-center">🎀 PhotoBooth by Photocute & Love 🎀</div>
+        <footer className="mt-8 text-center">
+          <p className="font-display text-sm italic text-plum-soft">made with love — <span className="text-blush-500">PhotoCute</span> ✦ 2026</p>
+        </footer>
       </div>
-    </div >
+    </div>
   );
 }

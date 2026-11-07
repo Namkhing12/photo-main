@@ -21,24 +21,19 @@ export default function PhotoBoothPage() {
         setIsFinished(false);
     };
 
-    const handleRemovePhoto = (index: number) => {
-        setPhotos(prev => prev.filter((_, i) => i !== index));
-    };
-
     if (isFinished) {
         return (
             <PhotoEditor
                 photos={photos}
                 onRetake={resetAll}
-                onRemovePhoto={handleRemovePhoto}
                 filterId={currentFilterId}
             />
         );
     }
 
     return (
-        <main className="min-h-[100dvh] bg-pink-50 flex items-center justify-center p-4 font-sans text-gray-800">
+        <div className="min-h-full">
             <PhotoBooth onFinish={handleFinish} />
-        </main>
+        </div>
     );
 }

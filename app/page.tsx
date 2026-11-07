@@ -1,18 +1,2 @@
-'use client';
-
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-
-export default function Home() {
-  const router = useRouter();
-
-  useEffect(() => {
-    router.push('/PhotoBooth');
-  }, [router]);
-
-  return (
-    <div className="min-h-[100dvh] bg-pink-50 flex items-center justify-center">
-      <div className="text-pink-500 font-medium">กำลังไปหน้าถ่ายรูป...</div>
-    </div>
-  );
-}
+// หน้าแรกเปิดใช้งาน Photo Booth ได้ทันที ไม่ต้องเข้าสู่ระบบ
+export { default } from './PhotoBooth/page';

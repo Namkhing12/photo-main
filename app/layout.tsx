@@ -1,27 +1,33 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import type { Metadata, Viewport } from "next";
+import { Prompt, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import NavbarWrapper from "@/app/src/NavbarWrapper";
+import SilentMedia from "@/app/src/SilentMedia";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
+const prompt = Prompt({
+  variable: "--font-prompt",
+  subsets: ["latin", "thai"],
+  weight: ["300", "400", "500", "600", "700"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const playfair = Playfair_Display({
+  variable: "--font-playfair",
   subsets: ["latin"],
+  style: ["normal", "italic"],
+  weight: ["500", "600", "700"],
 });
 
 export const metadata: Metadata = {
-  title: "PhotoCute - 🎀 Photo Booth",
+  title: "PhotoCute ✦ Photo Booth",
   description: "Capture and edit your cute photos",
-  viewport: {
-    width: "device-width",
-    initialScale: 1,
-    maximumScale: 1,
-    viewportFit: "cover",
-  },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  viewportFit: "cover",
+  themeColor: "#fff1f6",
 };
 
 export default function RootLayout({
@@ -30,10 +36,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="th">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased h-[100dvh] flex flex-col overflow-hidden`}
+        className={`${prompt.variable} ${playfair.variable} antialiased h-[100dvh] flex flex-col overflow-hidden`}
       >
+        <SilentMedia />
         <NavbarWrapper />
         <main className="flex-1 min-h-0 overflow-y-auto relative custom-scrollbar">
           {children}
