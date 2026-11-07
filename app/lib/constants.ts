@@ -1,24 +1,4 @@
-// ท่าโพสที่สุ่มให้ก่อนถ่ายแต่ละช็อต
-export const posePrompts: string[] = [
-    '🫰 มินิฮาร์ท',
-    '🐡 แก้มป่อง',
-    '😮 ทำหน้าตกใจ',
-    '✌️ ชูสองนิ้ว',
-    '🥺 ตาแป๋ว ๆ',
-    '😘 ส่งจุ๊บ',
-    '🐱 ทำมือแมวเหมียว',
-    '🤭 ปิดปากเขิน ๆ',
-    '😎 ทำหน้าคูล',
-    '🙈 ปิดตาข้างเดียว',
-    '🫶 ทำหัวใจสองมือ',
-    '😜 แลบลิ้นขยิบตา',
-    '🌸 เอามือเท้าคาง',
-    '🤪 หน้าตลกสุด ๆ',
-    '💁 สะบัดผม',
-    '🐰 ทำหูกระต่าย',
-];
-
-export type FilterGroup ='pink' | 'asian' | 'film' | 'mono' | 'fun';
+export type FilterGroup = 'pink' | 'asian' | 'film' | 'mono' | 'fun';
 
 export const filterGroups: { id: FilterGroup | 'all'; label: string }[] = [
     { id: 'all', label: 'ทั้งหมด' },

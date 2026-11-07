@@ -6,9 +6,9 @@ import {
   Camera, ChevronDown, ImagePlus, Timer,
   RefreshCw, ArrowRight, Trash2, SwitchCamera,
   ZoomIn, ZoomOut, Star, RotateCcw, Grid3x3, CameraOff, Loader2,
-  Shuffle, Sparkles
+  Sparkles
 } from 'lucide-react';
-import { filters, filterGroups, getFilterStyle, posePrompts, type FilterGroup } from '../lib/constants';
+import { filters, filterGroups, getFilterStyle, type FilterGroup } from '../lib/constants';
 import Confetti from '../src/Confetti';
 import { useFavoriteFilters } from '../lib/useFavoriteFilters';
 
@@ -58,54 +58,41 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
   const [flashKey, setFlashKey] = useState(0);
   const [filterGroup, setFilterGroup] = useState<FilterGroup | 'all' | 'fav'>('all');
   const [filtersOpen, setFiltersOpen] = useState(false); // มือถือ: แถบฟิลเตอร์พับเก็บได้ (PC แสดงตลอด)
-  const [poseIndex, setPoseIndex] = useState(0);
-  const shufflePose = useCallback(() => {
-    setPoseIndex(prev => {
-      let next = Math.floor(Math.random() * posePrompts.length);
-      if (next === prev) next = (next + 1) % posePrompts.length;
-      return next;
-    });
-  }, []);
-  const pose = posePrompts[poseIndex];
-
   // Zoom State (Digital Zoom)
   const [zoom, setZoom] = useState(1);
   const minZoom = 1;
   const maxZoom = 3;
 
-  const cropImage = async (imageSrc: string, zoomLevel: number): Promise<string> => {
-    if (zoomLevel <= 1) return imageSrc;
-
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        if (!ctx) { resolve(imageSrc); return; }
-
-        const w = img.width;
-        const h = img.height;
-
-        const cropW = w / zoomLevel;
-        const cropH = h / zoomLevel;
-        const cropX = (w - cropW) / 2;
-        const cropY = (h - cropH) / 2;
-
-        canvas.width = w;
-        canvas.height = h;
-
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'high';
-
-        ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, w, h);
-        resolve(canvas.toDataURL('image/jpeg', 1.0));
-      };
-      img.onerror = () => resolve(imageSrc);
-      img.src = imageSrc;
-    });
+  // จับภาพจาก <video> โดยตรงที่ความละเอียดเต็มของกล้อง
+  // (getScreenshot() ของ react-webcam ใช้ขนาดที่แสดงบนจอ เช่น ~280px บนมือถือ → รูปเบลอ)
+  // ตัดเป็น 3:4 ตรงกลางแบบเดียวกับ object-cover ที่เห็นบนจอ + ซูม + กลับด้านกล้องหน้า
+  const captureFrame = (zoomLevel: number): string | null => {
+    const video = webcamRef.current?.video;
+    if (!video || !video.videoWidth || !video.videoHeight) return null;
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
+    const target = 3 / 4;
+    let sw = vw, sh = vh;
+    if (vw / vh > target) sw = vh * target; else sh = vw / target;
+    sw /= zoomLevel;
+    sh /= zoomLevel;
+    const sx = (vw - sw) / 2;
+    const sy = (vh - sh) / 2;
+    // ไม่ขยายเกินความละเอียดจริง และจำกัดสูงสุด 1600px เพื่อไม่ให้หน่วยความจำมือถือเต็ม (เฟรม 10 รูป)
+    const scale = Math.min(1, 1600 / sh);
+    const ow = Math.round(sw * scale);
+    const oh = Math.round(sh * scale);
+    const canvas = document.createElement('canvas');
+    canvas.width = ow;
+    canvas.height = oh;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    if (facingMode === 'user') { ctx.translate(ow, 0); ctx.scale(-1, 1); } // กล้องหน้า: ให้ตรงกับภาพกระจกที่เห็น
+    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, ow, oh);
+    return canvas.toDataURL('image/jpeg', 0.92);
   };
-
-
 
   const handleZoomChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setZoom(parseFloat(e.target.value));
@@ -134,18 +121,16 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
     isCapturingRef.current = true;
     setShowFrameMenu(false); setShowTimerMenu(false);
     const maxCount = selectedFrame.count;
-    const takePhoto = async () => {
+    const takePhoto = () => {
       try {
-        const imageSrc = webcamRef.current?.getScreenshot();
-        if (!imageSrc) {
+        const shot = captureFrame(zoom);
+        if (!shot) {
           alert('ยังไม่พร้อมถ่ายภาพ: โปรดตรวจสอบว่ากล้องเปิดอยู่');
           return;
         }
         setFlashKey(k => k + 1); // เอฟเฟกต์แฟลช
-        shufflePose(); // สุ่มท่าใหม่สำหรับช็อตถัดไป
-        const croppedSrc = await cropImage(imageSrc, zoom);
         // ไม่ให้เกินจำนวนช่องของเฟรม
-        setPhotos(prev => (prev.length >= maxCount ? prev : [...prev, croppedSrc]));
+        setPhotos(prev => (prev.length >= maxCount ? prev : [...prev, shot]));
       } finally {
         isCapturingRef.current = false;
         setCountDown(null);
@@ -162,7 +147,8 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
         cheeseRef.current = setTimeout(() => { cheeseRef.current = null; takePhoto(); }, 550);
       }
     }, 1000);
-  }, [timerSetting, zoom, selectedFrame.count, shufflePose]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timerSetting, zoom, selectedFrame.count, facingMode]);
 
   const resetAll = () => { stopCountdown(); setPhotos([]); setZoom(1); };
   const deletePhoto = (indexToDelete: number) => { setPhotos(prev => prev.filter((_, index) => index !== indexToDelete)); };
@@ -262,13 +248,13 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
 
         <div className="flex flex-col items-start gap-3 md:flex-row md:gap-6" onClick={(e) => e.stopPropagation()}>
           {/* ───── Studio card ───── */}
-          <section className="glass flex w-full flex-1 flex-col rounded-[2rem] p-3 sm:p-5 md:block md:rounded-[2.5rem] md:p-7">
+          <section className="glass flex w-full flex-1 flex-col rounded-[2rem] p-2.5 sm:p-5 md:block md:rounded-[2.5rem] md:p-7">
             {/* Controls */}
-            <div className="relative z-40 mb-4 flex flex-wrap items-center justify-center gap-2">
+            <div className="relative z-40 mb-3 flex flex-wrap items-center justify-center gap-1.5 sm:mb-4 sm:gap-2">
               <div className="relative">
                 <button
                   onClick={(e) => { e.stopPropagation(); setShowFrameMenu(!showFrameMenu); setShowTimerMenu(false); }}
-                  className={`chip min-h-[44px] px-4 text-sm ${showFrameMenu ? '!border-blush-400 !text-blush-600 bg-white' : ''}`}
+                  className={`chip min-h-[40px] px-3 text-xs sm:min-h-[44px] sm:px-4 sm:text-sm ${showFrameMenu ? '!border-blush-400 !text-blush-600 bg-white' : ''}`}
                   aria-expanded={showFrameMenu}
                 >
                   <FrameIcon type={selectedFrame.iconType} />
@@ -294,7 +280,7 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
               <div className="relative">
                 <button
                   onClick={(e) => { e.stopPropagation(); setShowTimerMenu(!showTimerMenu); setShowFrameMenu(false); }}
-                  className={`chip min-h-[44px] px-4 text-sm ${showTimerMenu ? '!border-blush-400 !text-blush-600 bg-white' : ''}`}
+                  className={`chip min-h-[40px] px-3 text-xs sm:min-h-[44px] sm:px-4 sm:text-sm ${showTimerMenu ? '!border-blush-400 !text-blush-600 bg-white' : ''}`}
                   aria-expanded={showTimerMenu}
                 >
                   <Timer size={16} />
@@ -318,20 +304,20 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
               </div>
 
               <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
-              <button onClick={handleUploadClick} disabled={isComplete || countDown !== null} className="chip min-h-[44px] px-4 text-sm">
+              <button onClick={handleUploadClick} disabled={isComplete || countDown !== null} className="chip min-h-[40px] px-3 text-xs sm:min-h-[44px] sm:px-4 sm:text-sm">
                 <ImagePlus size={16} />
-                <span>อัปโหลดรูป</span>
+                <span className="sm:hidden">อัปโหลด</span><span className="hidden sm:inline">อัปโหลดรูป</span>
               </button>
             </div>
 
             {/* Camera — polaroid-style body */}
-            <div className="relative mx-auto w-full max-w-[max(200px,min(300px,calc((100dvh_-_390px)*0.75)))] sm:max-w-[380px] md:max-w-[440px]">
+            <div className="relative mx-auto w-full max-w-[max(240px,calc((100dvh_-_280px)*0.75))] sm:max-w-[400px] md:max-w-[max(320px,min(440px,calc((100dvh_-_380px)*0.75)))]">
               {/* stickers */}
               <span className="pointer-events-none absolute -left-4 -top-5 z-50 -rotate-12 text-4xl drop-shadow-md animate-float" aria-hidden>🎀</span>
               <span className="pointer-events-none absolute -right-3 top-1/3 z-50 text-2xl text-rosegold animate-twinkle" aria-hidden>✦</span>
               <span className="pointer-events-none absolute -bottom-3 -left-2 z-50 text-xl text-blush-400 animate-twinkle animation-delay-2000" aria-hidden>✧</span>
 
-              <div className="ring-luxe relative rounded-[2rem] bg-gradient-to-b from-white to-blush-50 p-2.5 pb-0 shadow-[0_40px_80px_-30px_rgba(217,58,118,0.6),0_10px_25px_-15px_rgba(74,31,54,0.3)] md:rounded-[2.4rem] md:p-3 md:pb-0">
+              <div className="ring-luxe relative rounded-[2rem] bg-gradient-to-b from-white to-blush-50 p-2 pb-0 sm:p-2.5 sm:pb-0 shadow-[0_40px_80px_-30px_rgba(217,58,118,0.6),0_10px_25px_-15px_rgba(74,31,54,0.3)] md:rounded-[2.4rem] md:p-3 md:pb-0">
                 <div className="relative aspect-[3/4] w-full overflow-hidden rounded-[1.5rem] bg-gradient-to-br from-blush-200 via-blush-100 to-lilac md:rounded-[1.9rem]">
                   <Webcam
                     key={cameraKey}
@@ -339,8 +325,6 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
                     muted
                     playsInline
                     ref={webcamRef}
-                    screenshotFormat="image/jpeg"
-                    screenshotQuality={1}
                     mirrored={facingMode === 'user'}
                     onUserMedia={() => setCameraStatus('ready')}
                     onUserMediaError={(err) => {
@@ -349,8 +333,8 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
                     }}
                     videoConstraints={{
                       facingMode: facingMode,
-                      aspectRatio: { ideal: 0.75 },
-                      width: { ideal: 1080 },
+                      // ขอความละเอียดสูงตามสัดส่วนเซนเซอร์ 4:3 (มือถือจะหมุนเป็นแนวตั้งให้เอง) แล้วค่อยตัดเป็น 3:4
+                      width: { ideal: 1920 },
                       height: { ideal: 1440 }
                     }}
                     style={{ transform: `scale(${zoom})`, transformOrigin: 'center center' }}
@@ -435,21 +419,6 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
                     </button>
                   </div>
 
-                  {/* Pose prompt */}
-                  {cameraStatus === 'ready' && !isComplete && countDown === null && (
-                    <div className="absolute bottom-3 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1 whitespace-nowrap rounded-full bg-white/90 py-1 pl-3 pr-1 text-xs font-semibold text-plum shadow-md backdrop-blur-md">
-                      <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-blush-400">pose</span>
-                      <span key={pose} className="animate-pop inline-block">{pose}</span>
-                      <button
-                        onClick={shufflePose}
-                        aria-label="สุ่มท่าโพสใหม่"
-                        className="ml-0.5 grid h-7 w-7 place-items-center rounded-full text-blush-500 transition-all hover:bg-blush-100 active:rotate-180"
-                      >
-                        <Shuffle size={13} />
-                      </button>
-                    </div>
-                  )}
-
                   {/* Countdown */}
                   {countDown !== null && (
                     <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-4 bg-plum/20 backdrop-blur-[2px]">
@@ -458,12 +427,25 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
                           <span key={countDown} className="animate-boing grid h-36 w-36 place-items-center rounded-full bg-white/25 shadow-[0_0_0_10px_rgba(255,255,255,0.15)] backdrop-blur-sm md:h-44 md:w-44">
                             <span className="font-display text-[6rem] italic leading-none text-white drop-shadow-[0_6px_30px_rgba(242,86,143,0.9)] md:text-[8rem]">{countDown}</span>
                           </span>
-                          <span className="animate-wiggle rounded-full bg-white/90 px-4 py-1.5 text-sm font-semibold text-blush-600 shadow-lg">{pose}</span>
+                          <span className="animate-wiggle rounded-full bg-white/90 px-4 py-1.5 text-sm font-semibold text-blush-600 shadow-lg">ยิ้มหวาน ๆ นะ ✦</span>
                         </>
                       ) : (
                         <span className="animate-boing font-display whitespace-nowrap text-5xl italic text-white drop-shadow-[0_6px_30px_rgba(242,86,143,0.9)] md:text-6xl">ยิ้มมม~ 🧀</span>
                       )}
                     </div>
+                  )}
+
+                  {/* Shutter — อยู่ในกล้อง */}
+                  {cameraStatus === 'ready' && !isComplete && countDown === null && (
+                    <button
+                      onClick={startCapture}
+                      aria-label="ถ่ายรูป"
+                      className="absolute bottom-4 left-1/2 z-40 grid h-[70px] w-[70px] -translate-x-1/2 place-items-center rounded-full border-[3px] border-white/90 bg-white/25 shadow-[0_10px_30px_-8px_rgba(242,86,143,0.8)] backdrop-blur-md transition-transform hover:scale-105 active:scale-90 md:h-20 md:w-20"
+                    >
+                      <span className="btn-candy h-[54px] w-[54px] !gap-0 md:h-[62px] md:w-[62px]">
+                        <Camera className="relative z-10 h-6 w-6" />
+                      </span>
+                    </button>
                   )}
 
                   {/* Flash */}
@@ -492,9 +474,10 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
                 </div>
 
                 {/* Polaroid chin */}
-                <div className="flex items-center justify-between px-2 py-3 md:py-3.5">
+                <div className="flex items-center justify-between px-2 py-2.5 md:py-3.5">
                   <span className="font-display text-base italic text-plum">Photo<span className="text-blush-500">Cute</span> <span className="text-rosegold">✦</span> cam</span>
                   <div className="flex items-center gap-1">
+                    <span className="mr-1 text-[11px] font-semibold text-plum-soft">{Math.min(photos.length, selectedFrame.count)}/{selectedFrame.count}</span>
                     {Array.from({ length: selectedFrame.count }).map((_, i) => (
                       <span key={i} className={`h-1.5 rounded-full transition-all duration-300 ${i < photos.length ? 'w-4 bg-blush-500' : 'w-1.5 bg-blush-200'}`} />
                     ))}
@@ -572,41 +555,18 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
               </div>
             </div>
 
-            {/* Actions */}
-            <div className="order-2 mt-4 flex flex-col items-center gap-2 md:order-none md:mt-5 md:gap-3">
-              {!isComplete ? (
-                <>
-                  <button
-                    onClick={startCapture}
-                    disabled={countDown !== null}
-                    aria-label="ถ่ายรูป"
-                    className="group relative grid h-[68px] w-[68px] place-items-center rounded-full bg-white md:h-20 md:w-20 shadow-[0_18px_40px_-14px_rgba(242,86,143,0.7)] transition-transform hover:scale-105 active:scale-95 disabled:opacity-60"
-                  >
-                    <span className="absolute inset-0 rounded-full border-[3px] border-blush-200" />
-                    <span className="btn-candy h-[52px] w-[52px] !gap-0 md:h-[62px] md:w-[62px]">
-                      <Camera className="relative z-10 h-6 w-6" />
-                    </span>
-                  </button>
-                  <p className="text-sm font-medium text-plum-soft">
-                    {countDown !== null
-                      ? 'ยิ้มหวาน ๆ นะ ✦'
-                      : photos.length === 0
-                        ? 'แตะเพื่อเริ่มถ่าย'
-                        : <>รูปที่ <span className="font-semibold text-blush-600">{photos.length + 1}</span> / {selectedFrame.count}</>}
-                  </p>
-                </>
-              ) : (
-                <div className="flex w-full flex-col-reverse items-center justify-center gap-3 sm:flex-row">
-                  <button onClick={() => deletePhoto(photos.length - 1)} className="chip w-full justify-center px-6 py-3.5 text-sm sm:w-auto">
-                    <RefreshCw size={16} /> ถ่ายรูปสุดท้ายใหม่
-                  </button>
-                  <button onClick={() => onFinish?.(photos.slice(0, selectedFrame.count), selectedFilter)} className="btn-candy w-full px-9 py-3.5 text-base sm:w-auto">
-                    <span className="relative z-10">ไปแต่งรูปกันเลย</span>
-                    <ArrowRight size={18} className="relative z-10" />
-                  </button>
-                </div>
-              )}
-            </div>
+            {/* Actions — เมื่อถ่ายครบแล้ว */}
+            {isComplete && (
+              <div className="order-2 mt-3 flex w-full flex-col-reverse items-center justify-center gap-2.5 sm:flex-row md:order-none md:mt-5 md:gap-3">
+                <button onClick={() => deletePhoto(photos.length - 1)} className="chip w-full justify-center px-6 py-3 text-sm sm:w-auto md:py-3.5">
+                  <RefreshCw size={16} /> ถ่ายรูปสุดท้ายใหม่
+                </button>
+                <button onClick={() => onFinish?.(photos.slice(0, selectedFrame.count), selectedFilter)} className="btn-candy w-full px-9 py-3 text-base sm:w-auto md:py-3.5">
+                  <span className="relative z-10">ไปแต่งรูปกันเลย</span>
+                  <ArrowRight size={18} className="relative z-10" />
+                </button>
+              </div>
+            )}
           </section>
 
           {/* ───── Film strip ───── */}
