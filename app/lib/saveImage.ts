@@ -91,9 +91,13 @@ const captureLayer = async (
  *  2) รูปถ่าย img.photo-item + ฟิลเตอร์ของแต่ละรูป ← วาดเองด้วย drawImage
  *  3) กรอบรูปแบบภาพ (data-layer="multiply")  ← วาดเองด้วยโหมด multiply
  *  4) ข้อความ/สติกเกอร์/กรอบอิโมจิ (ชั้นอื่น)   ← html-to-image พื้นโปร่งใส
+ *  5) drawOverlay (เช่น เส้นปากกา Doodle)      ← วาดเองที่ความละเอียดเต็ม
  * เหตุผล: iOS/Android บางรุ่นวาดรูปถ่าย (<img> ขนาดใหญ่) ใน SVG foreignObject ไม่ขึ้นเลย
  */
-export const captureNode = async (node: HTMLElement): Promise<Blob> => {
+export const captureNode = async (
+  node: HTMLElement,
+  drawOverlay?: (ctx: CanvasRenderingContext2D, width: number, height: number) => void,
+): Promise<Blob> => {
   const p = detectPlatform();
   const W = node.offsetWidth;
   const H = node.offsetHeight;
@@ -161,6 +165,9 @@ export const captureNode = async (node: HTMLElement): Promise<Blob> => {
   const top = await captureLayer(node, keepTop, common, clearBg);
   ctx.drawImage(top, 0, 0, out.width, out.height);
   top.width = 0; top.height = 0;
+
+  // ชั้น 5: วาดทับด้านบนสุด
+  if (drawOverlay) drawOverlay(ctx, out.width, out.height);
 
   const blob = await new Promise<Blob | null>(resolve => out.toBlob(resolve, 'image/png'));
   out.width = 0; out.height = 0;

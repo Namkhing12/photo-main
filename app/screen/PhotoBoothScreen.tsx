@@ -6,7 +6,7 @@ import {
   Camera, ChevronDown, ImagePlus, Timer,
   RefreshCw, ArrowRight, Trash2, SwitchCamera,
   ZoomIn, ZoomOut, Star, RotateCcw, Grid3x3, CameraOff, Loader2,
-  Sparkles
+  Sparkles, Lightbulb
 } from 'lucide-react';
 import { filters, filterGroups, getFilterStyle, type FilterGroup } from '../lib/constants';
 import Confetti from '../src/Confetti';
@@ -57,6 +57,9 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
   const [cameraStatus, setCameraStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [cameraKey, setCameraKey] = useState(0); // เปลี่ยนค่าเพื่อ remount กล้อง (ลองใหม่)
   const [showGrid, setShowGrid] = useState(false);
+  // ไฟวงแหวน: ทำขอบจอให้สว่าง ช่วยส่องหน้าตอนใช้กล้องหน้าในที่มืด (แตะวน ปิด → ขาว → อุ่น)
+  const [ringLight, setRingLight] = useState<'off' | 'white' | 'warm'>('off');
+  const cycleRingLight = () => setRingLight(r => (r === 'off' ? 'white' : r === 'white' ? 'warm' : 'off'));
   const [flashKey, setFlashKey] = useState(0);
   const [reviewShot, setReviewShot] = useState<Shot | null>(null); // ค้างภาพที่เพิ่งถ่าย 1 วินาที
   const [filterGroup, setFilterGroup] = useState<FilterGroup | 'all' | 'fav'>('all');
@@ -242,6 +245,18 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
   return (
     <div className="relative w-full min-h-full font-sans text-plum" onClick={closeMenus}>
       {isComplete && <Confetti key={`${selectedFrame.id}-${photos.length}`} />}
+      {ringLight !== 'off' && (
+        <div
+          aria-hidden
+          className="pointer-events-none fixed inset-0 z-[90] transition-opacity duration-300"
+          style={{
+            // ขอบหนาสว่าง + แสงฟุ้งเข้าด้านใน (ไม่บังกล้องตรงกลาง)
+            boxShadow: ringLight === 'white'
+              ? 'inset 0 0 0 clamp(22px, 5vmin, 48px) #ffffff, inset 0 0 clamp(60px, 14vmin, 140px) clamp(30px, 8vmin, 80px) rgba(255,255,255,0.92)'
+              : 'inset 0 0 0 clamp(22px, 5vmin, 48px) #fff1d6, inset 0 0 clamp(60px, 14vmin, 140px) clamp(30px, 8vmin, 80px) rgba(255,226,180,0.9)',
+          }}
+        />
+      )}
       {/* Aura */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden" aria-hidden>
         <div className="absolute -left-24 -top-24 h-[420px] w-[420px] rounded-full bg-blush-300/40 blur-3xl animate-blob" />
@@ -410,6 +425,19 @@ export default function PhotoBooth({ onFinish }: PhotoBoothProps) {
                       </div>
                     </>
                   )}
+
+                  {/* Top-left tools: ไฟวงแหวน */}
+                  <div className="absolute left-3 top-3 z-40 flex flex-col gap-2">
+                    <button
+                      onClick={cycleRingLight}
+                      aria-label={ringLight === 'off' ? 'เปิดไฟวงแหวน' : ringLight === 'white' ? 'ไฟวงแหวนสีขาว (แตะเพื่อเปลี่ยนเป็นโทนอุ่น)' : 'ไฟวงแหวนโทนอุ่น (แตะเพื่อปิด)'}
+                      title="ไฟวงแหวน · ส่องหน้าในที่มืด"
+                      aria-pressed={ringLight !== 'off'}
+                      className={`grid h-9 w-9 place-items-center rounded-full border backdrop-blur-md transition-all active:scale-90 ${ringLight === 'white' ? 'border-white bg-white text-blush-600' : ringLight === 'warm' ? 'border-amber-100 bg-amber-100 text-amber-600' : 'border-white/40 bg-black/20 text-white hover:bg-blush-500'}`}
+                    >
+                      <Lightbulb size={16} />
+                    </button>
+                  </div>
 
                   {/* Top-right tools */}
                   <div className="absolute right-3 top-3 z-40 flex flex-col gap-2">

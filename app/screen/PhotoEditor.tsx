@@ -1,12 +1,13 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
-import { Download, Share2, ChevronDown, RefreshCw, Ban, Type, Lock, Image as ImageIcon, Star, Sparkles, Palette, Smile, ArrowLeft, Pipette, Sticker, X, RotateCw, Copy, Trash2 } from 'lucide-react';
+import { Download, Share2, ChevronDown, RefreshCw, Ban, Type, Lock, Image as ImageIcon, Star, Sparkles, Palette, Smile, ArrowLeft, Pipette, Sticker, X, RotateCw, Copy, Trash2, PenLine, Undo2, ImageUp } from 'lucide-react';
 import { getFilterStyle, filterGroups, type FilterGroup } from '../lib/constants';
 import { useFavoriteFilters } from '../lib/useFavoriteFilters';
 import { stickerArts, getStickerArt, STICKER_CUT_FILTER, stickerGroups, type StickerGroup } from '../lib/stickers';
 import { detectPlatform, captureNode, canShareFile, shareFile, downloadUrl, makeFileName } from '../lib/saveImage';
 import Confetti from '../src/Confetti';
+import { drawStrokes, neonColors, gelColors, type Stroke, type PenKind } from '../lib/doodle';
 import emojisData from '../lib/emojis.json';
 
 // Type definition for emojilib data
@@ -297,7 +298,8 @@ const getReadableTextColor = (background: string): string => {
 };
 
 // สติกเกอร์ที่วางบนแถบรูป (ตำแหน่งเป็น % ของแถบ เพื่อให้ตรงกันทุกขนาดจอ)
-type PlacedSticker = { uid: string; kind: 'art' | 'emoji'; value: string; x: number; y: number; size: number; rot: number };
+// kind 'image' = รูปจากเครื่องผู้ใช้ (value เป็น data URL ที่ย่อขนาดแล้ว)
+type PlacedSticker = { uid: string; kind: 'art' | 'emoji' | 'image'; value: string; x: number; y: number; size: number; rot: number };
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
 
 interface PhotoEditorProps {
@@ -335,7 +337,7 @@ export default function PhotoEditor({ photos, onRetake, filterId = 'normal', pho
   const [footerTitle, setFooterTitle] = useState('Photo Booth');
   const [footerSubtitle, setFooterSubtitle] = useState('✦ 2026 · PhotoCute ✦');
   const [filterGroup, setFilterGroup] = useState<FilterGroup | 'all' | 'fav'>('all');
-  const [activeTab, setActiveTab] = useState<'frame' | 'sticker' | 'emoji' | 'filter' | 'text'>('frame');
+  const [activeTab, setActiveTab] = useState<'frame' | 'sticker' | 'emoji' | 'draw' | 'filter' | 'text'>('frame');
   const [placed, setPlaced] = useState<PlacedSticker[]>([]);
   const [selectedUid, setSelectedUid] = useState<string | null>(null);
   const [emojiPlaceMode, setEmojiPlaceMode] = useState<'corner' | 'free'>('corner');
@@ -400,7 +402,7 @@ export default function PhotoEditor({ photos, onRetake, filterId = 'normal', pho
   const addSticker = (kind: PlacedSticker['kind'], value: string) => {
     const uid = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
     const jitter = () => (Math.random() - 0.5) * 16;
-    setPlaced(prev => [...prev, { uid, kind, value, x: clamp(50 + jitter(), 10, 90), y: clamp(40 + jitter(), 10, 90), size: kind === 'art' ? 28 : 18, rot: Math.round((Math.random() - 0.5) * 24) }]);
+    setPlaced(prev => [...prev, { uid, kind, value, x: clamp(50 + jitter(), 10, 90), y: clamp(40 + jitter(), 10, 90), size: kind === 'emoji' ? 18 : kind === 'image' ? 34 : 28, rot: Math.round((Math.random() - 0.5) * 24) }]);
     setSelectedUid(uid);
   };
   const updateSticker = (uid: string, patch: Partial<PlacedSticker>) =>
@@ -417,6 +419,107 @@ export default function PhotoEditor({ photos, onRetake, filterId = 'normal', pho
     setSelectedUid(copy.uid);
   };
   const selectedSticker = placed.find(s => s.uid === selectedUid) ?? null;
+
+  // ── แปะรูปจากเครื่องเป็นสติกเกอร์ ──
+  const stickerFileRef = useRef<HTMLInputElement>(null);
+  const handleStickerFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // เลือกไฟล์เดิมซ้ำได้
+    if (!file || !file.type.startsWith('image/')) return;
+    const url = URL.createObjectURL(file);
+    try {
+      const im = new Image();
+      await new Promise<void>((resolve, reject) => { im.onload = () => resolve(); im.onerror = () => reject(new Error('เปิดรูปไม่ได้')); im.src = url; });
+      // ย่อให้ด้านยาวไม่เกิน 512px (ไฟล์เล็ก ลื่น และบันทึกรูปได้ทุกเครื่อง) — เก็บเป็น PNG เพื่อรักษาพื้นโปร่งใส
+      const MAX = 512;
+      const scale = Math.min(1, MAX / Math.max(im.naturalWidth, im.naturalHeight));
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(im.naturalWidth * scale));
+      c.height = Math.max(1, Math.round(im.naturalHeight * scale));
+      c.getContext('2d')?.drawImage(im, 0, 0, c.width, c.height);
+      addSticker('image', c.toDataURL('image/png'));
+      c.width = 0; c.height = 0;
+    } catch (err) {
+      alert('ขออภัย! ใช้รูปนี้เป็นสติกเกอร์ไม่ได้: ' + (err instanceof Error ? err.message : ''));
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  };
+  const renderStickerContent = (st: PlacedSticker, emojiFontPx?: number) =>
+    st.kind === 'art' ? getStickerArt(st.value)
+      : st.kind === 'image' ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={st.value} alt="" draggable={false} className="h-full w-full object-contain" />
+      ) : (
+        <span className="grid h-full w-full place-items-center leading-none" style={emojiFontPx ? { fontSize: `${emojiFontPx}px` } : undefined}>{st.value}</span>
+      );
+
+  // ── ปากกา Doodle ──
+  const [strokes, setStrokes] = useState<Stroke[]>([]);
+  const [penKind, setPenKind] = useState<PenKind>('neon');
+  const [penColor, setPenColor] = useState(neonColors[0]);
+  const [penSize, setPenSize] = useState(0.014); // สัดส่วนของความกว้างแถบรูป
+  const [customPenColor, setCustomPenColor] = useState('#ff4fa3'); // สีที่ผู้ใช้เลือกเอง (จำไว้แม้สลับไปสีอื่น)
+  const isCustomPen = !(penKind === 'neon' ? neonColors : gelColors).includes(penColor);
+  const drawCanvasRef = useRef<HTMLCanvasElement>(null);
+  const liveStrokeRef = useRef<Stroke | null>(null);
+  const strokesRef = useRef<Stroke[]>(strokes);
+  strokesRef.current = strokes;
+  const isDrawing = activeTab === 'draw';
+
+  const redrawDoodle = React.useCallback(() => {
+    const c = drawCanvasRef.current;
+    if (!c) return;
+    const w = c.clientWidth, h = c.clientHeight;
+    const dpr = Math.min(3, window.devicePixelRatio || 1);
+    if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) {
+      c.width = Math.round(w * dpr);
+      c.height = Math.round(h * dpr);
+    }
+    const ctx = c.getContext('2d');
+    if (!ctx) return;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    const live = liveStrokeRef.current;
+    drawStrokes(ctx, live ? [...strokesRef.current, live] : strokesRef.current, w, h);
+  }, []);
+
+  React.useEffect(() => { redrawDoodle(); }, [strokes, redrawDoodle]);
+  React.useEffect(() => {
+    const c = drawCanvasRef.current;
+    if (!c) return;
+    const ro = new ResizeObserver(() => redrawDoodle());
+    ro.observe(c);
+    return () => ro.disconnect();
+  }, [printRun, redrawDoodle]); // แถบรูปถูก remount ทุกครั้งที่พิมพ์ใหม่
+
+  const pointOnCanvas = (e: React.PointerEvent<HTMLCanvasElement>): [number, number] => {
+    const r = e.currentTarget.getBoundingClientRect();
+    return [clamp((e.clientX - r.left) / r.width, 0, 1), clamp((e.clientY - r.top) / r.height, 0, 1)];
+  };
+  const onDrawStart = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!isDrawing) return;
+    e.stopPropagation();
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    liveStrokeRef.current = { kind: penKind, color: penColor, size: penSize, points: [pointOnCanvas(e)] };
+    redrawDoodle();
+  };
+  const onDrawMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const live = liveStrokeRef.current;
+    if (!live) return;
+    live.points.push(pointOnCanvas(e));
+    redrawDoodle();
+  };
+  const onDrawEnd = () => {
+    const live = liveStrokeRef.current;
+    liveStrokeRef.current = null;
+    if (live) setStrokes(prev => [...prev, live]);
+  };
+  const pickPenKind = (k: PenKind) => {
+    setPenKind(k);
+    if (!isCustomPen) setPenColor(k === 'neon' ? neonColors[0] : gelColors[0]); // ถ้าใช้สีที่เลือกเองอยู่ ให้คงสีเดิม
+  };
 
   // ลาก / หมุน+ย่อขยาย ด้วย Pointer Events (รองรับทั้งเมาส์และนิ้ว)
   const startStickerGesture = (e: React.PointerEvent, uid: string, mode: 'move' | 'transform') => {
@@ -540,7 +643,7 @@ export default function PhotoEditor({ photos, onRetake, filterId = 'normal', pho
       setLoading(true);
       setSelectedUid(null); // ซ่อนกรอบเลือกสติกเกอร์ก่อนจับภาพ
       await new Promise(resolve => setTimeout(resolve, 300));
-      const blob = await captureNode(stripRef.current);
+      const blob = await captureNode(stripRef.current, (ctx, w, h) => drawStrokes(ctx, strokesRef.current, w, h));
       const fileName = makeFileName();
       const file = new File([blob], fileName, { type: 'image/png' });
       const url = URL.createObjectURL(blob);
@@ -601,6 +704,7 @@ export default function PhotoEditor({ photos, onRetake, filterId = 'normal', pho
     { id: 'frame', label: 'กรอบ', icon: Palette },
     { id: 'sticker', label: 'สติกเกอร์', icon: Sticker },
     { id: 'emoji', label: 'อิโมจิ', icon: Smile },
+    { id: 'draw', label: 'วาด', icon: PenLine },
     { id: 'filter', label: 'ฟิลเตอร์', icon: Sparkles },
     { id: 'text', label: 'ข้อความ', icon: Type },
   ] as const;
@@ -687,9 +791,7 @@ export default function PhotoEditor({ photos, onRetake, filterId = 'normal', pho
                           style={{ left: `${st.x}%`, top: `${st.y}%`, width: `${st.size}%`, aspectRatio: '1 / 1', transform: `translate(-50%, -50%) rotate(${st.rot}deg)` }}
                         >
                           <div className="h-full w-full" style={{ filter: STICKER_CUT_FILTER }}>
-                            {st.kind === 'art' ? getStickerArt(st.value) : (
-                              <span className="grid h-full w-full place-items-center leading-none" style={{ fontSize: `${(st.size / 100) * stripWidth * 0.8}px` }}>{st.value}</span>
-                            )}
+                            {renderStickerContent(st, (st.size / 100) * stripWidth * 0.8)}
                           </div>
                           {sel && (
                             <>
@@ -717,6 +819,20 @@ export default function PhotoEditor({ photos, onRetake, filterId = 'normal', pho
                       );
                     })}
                   </div>
+
+                  {/* ปากกา Doodle (ตอนบันทึกจะวาดใหม่ที่ความละเอียดเต็มผ่าน captureNode) */}
+                  <canvas
+                    ref={drawCanvasRef}
+                    data-html2canvas-ignore="true"
+                    onPointerDown={onDrawStart}
+                    onPointerMove={onDrawMove}
+                    onPointerUp={onDrawEnd}
+                    onPointerCancel={onDrawEnd}
+                    className={`absolute inset-0 z-[45] h-full w-full ${isDrawing ? 'cursor-crosshair touch-none' : 'pointer-events-none'}`}
+                  />
+                  {isDrawing && (
+                    <div data-html2canvas-ignore="true" className="pointer-events-none absolute inset-0 z-[46] rounded-[6px] ring-2 ring-inset ring-blush-400/70" />
+                  )}
                 </div>
               </div>
             </div>
@@ -747,7 +863,7 @@ export default function PhotoEditor({ photos, onRetake, filterId = 'normal', pho
 
           {/* Tabs */}
           <div className="px-3 pb-2 pt-1.5 md:p-4">
-            <div className="grid grid-cols-5 gap-1 rounded-[1.4rem] bg-blush-100/70 p-1 sm:rounded-full">
+            <div className="grid grid-cols-6 gap-1 rounded-[1.4rem] bg-blush-100/70 p-1 sm:rounded-full">
               {tabs.map(({ id, label, icon: Icon }) => (
                 <button
                   key={id}
@@ -872,7 +988,7 @@ export default function PhotoEditor({ photos, onRetake, filterId = 'normal', pho
                   <section className="rounded-3xl border border-blush-100 bg-white/80 p-4 shadow-[0_10px_24px_-16px_rgba(242,86,143,0.6)]">
                     <div className="mb-3 flex items-center gap-3">
                       <div className="sticker-cut grid h-12 w-12 shrink-0 place-items-center">
-                        {selectedSticker.kind === 'art' ? getStickerArt(selectedSticker.value) : <span className="text-3xl leading-none">{selectedSticker.value}</span>}
+                        {selectedSticker.kind === 'emoji' ? <span className="text-3xl leading-none">{selectedSticker.value}</span> : renderStickerContent(selectedSticker)}
                       </div>
                       <div className="flex-1">
                         <p className="text-sm font-semibold text-plum">ปรับสติกเกอร์</p>
@@ -898,6 +1014,17 @@ export default function PhotoEditor({ photos, onRetake, filterId = 'normal', pho
                       <button onClick={() => { setPlaced([]); setSelectedUid(null); }} className="text-[11px] font-medium text-plum-soft underline-offset-2 hover:text-blush-600 hover:underline">ลบทั้งหมด</button>
                     )}
                   </div>
+                  <input ref={stickerFileRef} type="file" accept="image/*" onChange={handleStickerFile} className="hidden" />
+                  <button
+                    onClick={() => stickerFileRef.current?.click()}
+                    className="mb-3 flex w-full items-center gap-3 rounded-2xl border-2 border-dashed border-blush-200 bg-white/60 p-3 text-left transition-all hover:border-blush-400 hover:bg-white"
+                  >
+                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-blush-100 text-blush-600"><ImageUp size={18} /></span>
+                    <span>
+                      <span className="block text-sm font-semibold text-plum">แปะรูปจากเครื่อง</span>
+                      <span className="block text-[11px] text-plum-soft">เลือกรูปมาเป็นสติกเกอร์ · ไฟล์ PNG พื้นใสจะสวยสุด</span>
+                    </span>
+                  </button>
                   <div className="no-scrollbar -mx-1 mb-3 flex gap-1.5 overflow-x-auto px-1">
                     {stickerGroups.map(g => (
                       <button key={g.id} onClick={() => setStickerGroup(g.id)} className={`chip shrink-0 whitespace-nowrap px-3 py-1.5 text-[11px] ${stickerGroup === g.id ? 'chip-active' : ''}`}>{g.label}</button>
@@ -994,6 +1121,62 @@ export default function PhotoEditor({ photos, onRetake, filterId = 'normal', pho
                     </div>
                   )}
                 </div>
+              </div>
+            )}
+
+            {activeTab === 'draw' && (
+              <div key="draw" className="animate-rise space-y-5">
+                <div className="grid grid-cols-2 gap-1 rounded-full bg-blush-100/70 p-1">
+                  {([['neon', 'นีออน ✦'], ['gel', 'ปากกาเจล']] as const).map(([k, label]) => (
+                    <button key={k} onClick={() => pickPenKind(k)} aria-pressed={penKind === k} className={`rounded-full py-2 text-xs font-semibold transition-all ${penKind === k ? 'bg-white text-blush-600 shadow-sm' : 'text-plum-soft'}`}>{label}</button>
+                  ))}
+                </div>
+                <section>
+                  <h3 className="eyebrow mb-2.5 px-1">สีปากกา</h3>
+                  <div className="flex flex-wrap gap-2.5">
+                    {(penKind === 'neon' ? neonColors : gelColors).map(c => (
+                      <button
+                        key={c}
+                        onClick={() => setPenColor(c)}
+                        aria-label={`สี ${c}`}
+                        aria-pressed={penColor === c}
+                        className={`h-9 w-9 rounded-full border border-blush-100 ring-2 ring-offset-2 ring-offset-white transition-transform hover:scale-110 ${penColor === c ? 'ring-blush-500' : 'ring-transparent'}`}
+                        style={{ background: c, boxShadow: penKind === 'neon' ? `0 0 10px ${c}` : undefined }}
+                      />
+                    ))}
+                    {/* เลือกสีเอง */}
+                    <label
+                      title="เลือกสีเอง"
+                      onClick={() => setPenColor(customPenColor)}
+                      className={`relative grid h-9 w-9 cursor-pointer place-items-center overflow-hidden rounded-full border border-blush-100 ring-2 ring-offset-2 ring-offset-white transition-transform hover:scale-110 ${isCustomPen ? 'ring-blush-500' : 'ring-transparent'}`}
+                      style={{
+                        background: isCustomPen ? penColor : 'conic-gradient(#ff4fa3, #ffe14d, #3dffb0, #3dd8ff, #8f7bff, #ff4fa3)',
+                        boxShadow: penKind === 'neon' && isCustomPen ? `0 0 10px ${penColor}` : undefined,
+                      }}
+                    >
+                      <input
+                        type="color"
+                        aria-label="เลือกสีปากกาเอง"
+                        value={customPenColor}
+                        onChange={e => { setCustomPenColor(e.target.value); setPenColor(e.target.value); }}
+                        className="absolute inset-0 cursor-pointer opacity-0"
+                      />
+                      <Pipette size={14} className="pointer-events-none text-white drop-shadow" />
+                    </label>
+                  </div>
+                </section>
+                <label className="flex items-center gap-3 px-1 text-[11px] font-semibold text-plum-soft">
+                  <span className="w-12">ความหนา</span>
+                  <input type="range" min={0.005} max={0.04} step={0.001} value={penSize} onChange={e => setPenSize(Number(e.target.value))} className="flex-1 accent-blush-500" />
+                  <span className="grid h-9 w-9 place-items-center rounded-full bg-plum/90">
+                    <span className="block rounded-full" style={{ width: Math.max(3, penSize * 340), height: Math.max(3, penSize * 340), background: penColor, boxShadow: penKind === 'neon' ? `0 0 6px ${penColor}` : undefined }} />
+                  </span>
+                </label>
+                <div className="flex gap-2">
+                  <button onClick={() => setStrokes(p => p.slice(0, -1))} disabled={!strokes.length} className="chip flex-1 justify-center py-2.5 text-xs"><Undo2 size={14} /> ย้อนกลับ</button>
+                  <button onClick={() => setStrokes([])} disabled={!strokes.length} className="chip flex-1 justify-center py-2.5 text-xs !text-blush-600"><Trash2 size={14} /> ลบเส้นทั้งหมด</button>
+                </div>
+                <p className="px-1 text-[11px] leading-relaxed text-plum-soft">✎ ใช้นิ้วหรือเมาส์วาดบนรูปได้เลย · ออกจากแท็บนี้เพื่อกลับไปลากสติกเกอร์</p>
               </div>
             )}
 
